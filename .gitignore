@@ -41,3 +41,15 @@ $RECYCLE.BIN/
 Network Trash Folder
 Temporary Items
 .apdisk
+*.ipch
+Debug/Win32NES.pdb
+*.opensdf
+*.obj
+Win32NES/Debug/vc120.idb
+*.pdb
+*.tlog
+Win32NES/Release/Win32NES.pch
+*.pch
+Win32NES/Release/Win32NES.log
+*.log
+*.ilk
