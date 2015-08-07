@@ -3,9 +3,10 @@
 #include "Opcodes.h"
 
 
-CPU::CPU(PPU *ppu)
+CPU::CPU(PPU *ppu, Controller *controller)
 {
 	this->ppu = ppu;
+	this->controller = controller;
 }
 
 

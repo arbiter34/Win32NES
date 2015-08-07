@@ -1,3 +1,6 @@
+#ifndef CPU_H
+#define CPU_H
+
 #pragma once
 
 #include <stdint.h>
@@ -16,7 +19,7 @@ class CPU
 	};
 
 public:
-	CPU(PPU *ppu);
+	CPU(PPU *ppu, Controller *controller);
 	~CPU();
 
 #pragma region CPU Ops
@@ -214,4 +217,6 @@ private:
 #pragma endregion
 
 };
+
+#endif
 

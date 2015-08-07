@@ -8,6 +8,9 @@ class PPU
 	// 16 bytes per pattern
 	static const int cPATTERN_SIZE = 16;
 public:
+
+	color_t screen[SCREEN_WIDTH * SCREEN_HEIGHT];
+
 	PPU();
 	~PPU();
 
@@ -57,7 +60,6 @@ private:
 	uint8_t cntHT;
 
 	bool first_write;
-	color_t screen[SCREEN_WIDTH * SCREEN_HEIGHT];
 
 	color_t get_pixel(int x, int y);
 	void draw_pixel(int x, int y, color_t color);
