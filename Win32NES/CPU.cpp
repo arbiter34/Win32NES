@@ -3,8 +3,9 @@
 #include "Opcodes.h"
 
 
-CPU::CPU()
+CPU::CPU(PPU *ppu)
 {
+	this->ppu = ppu;
 }
 
 
@@ -171,11 +172,29 @@ uint8_t CPU::read_memory(uint16_t address){
 	}
 	/* PPU Ctrl Registers - Mirrored 1023 Times*/
 	else if (address >= 0x2000 && address < 0x4000) {
-
+		switch (address & 0x07) {
+			case 0x00:
+				return ppu->read_control1();
+			case 0x01: 
+				return ppu->read_control2();
+			case 0x02:
+				return ppu->read_status();
+			case 0x04: 
+				return ppu->read_sprite_data();
+			case 0x07:
+				return ppu->read_vram_data();
+		}
 	}
 	/* Registers (Mostly APU) */
 	else if (address >= 0x4000 && address < 0x4020) {
-
+		switch (address) {
+			case 0x4016:
+				return controller->read_controller_state(1);
+			case 0x4017:
+				return controller->read_controller_state(2);
+			default:
+				return 0;
+		}
 	}
 	/* Cartridge Expansion ROM */
 	else if (address >= 0x4020 && address < 0x6000) {
@@ -199,11 +218,42 @@ void CPU::store_memory(uint16_t address, uint8_t word){
 	}
 	/* PPU Ctrl Registers - Mirrored 1023 Times*/
 	else if (address >= 0x2000 && address < 0x4000) {
-
+		switch (address & 0x07) {
+			case 0x00:
+				ppu->write_control1(word);
+				break;
+			case 0x01:
+				ppu->write_control2(word);
+				break;
+			case 0x03:
+				ppu->set_sprite_memory_address(word);
+				break;
+			case 0x04:
+				ppu->write_sprite_data(word);
+				break;
+			case 0x05:
+				ppu->write_scroll_register(word);
+				break;
+			case 0x06:
+				ppu->write_vram_address(word);
+				break;
+			case 0x07:
+				ppu->write_vram_data(word);
+				break;
+		}
 	}
 	/* Registers (Mostly APU) */
 	else if (address >= 0x4000 && address < 0x4020) {
-
+		switch (address) {
+			case 0x4014:
+				ppu->write_spr_ram((char *)(cpu_ram + word * 0x100));
+				break;
+			case 0x4016:
+				controller->write_value(word);
+				break;
+			default:
+				return;
+		}
 	}
 	/* Cartridge Expansion ROM */
 	else if (address >= 0x4020 && address < 0x6000) {
@@ -1191,7 +1241,7 @@ void CPU::initCPUTable() {
 
 #pragma region Static Init
 
-const uint8_t instructionCycles[0xFF] = {
+const uint8_t CPU::instructionCycles[0xFF] = {
 	7, 6, 2, 8, 3, 3, 5, 5, 3, 2, 2, 2, 4, 4, 6, 6,
 	2, 5, 2, 8, 4, 4, 6, 6, 2, 4, 2, 7, 4, 4, 7, 7,
 	6, 6, 2, 8, 3, 3, 5, 5, 4, 2, 2, 2, 4, 4, 6, 6,
@@ -1210,7 +1260,7 @@ const uint8_t instructionCycles[0xFF] = {
 	2, 5, 2, 8, 4, 4, 6, 6, 2, 4, 2, 7, 4, 4, 7
 };
 
-const uint8_t instructionPageCycles[0xFF] = {
+const uint8_t CPU::instructionPageCycles[0xFF] = {
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -1227,6 +1277,6 @@ const uint8_t instructionPageCycles[0xFF] = {
 	1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0
-}
+};
 
 #pragma endregion

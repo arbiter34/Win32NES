@@ -1,6 +1,8 @@
 #pragma once
 
 #include <stdint.h>
+#include "PPU.h"
+#include "Controller.h"
 
 class CPU
 {
@@ -8,13 +10,13 @@ class CPU
 	typedef void(CPU::*addressingModePointer)(void);	//Not necessary, here for clarity
 
 	typedef enum Interrupts {
-		None,
-		NMI,
-		IRQ
+		_None,
+		_NMI,
+		_IRQ
 	};
 
 public:
-	CPU();
+	CPU(PPU *ppu);
 	~CPU();
 
 #pragma region CPU Ops
@@ -27,7 +29,11 @@ public:
 private:
 
 #pragma region Vars
-	
+
+	/* Devices */
+	PPU *ppu;
+	Controller *controller;
+
 	/*Function Tables*/
 	instructionPointer cpuTable[0xFF];
 	addressingModePointer addressingModeTable[0xFF];
