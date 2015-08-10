@@ -53,3 +53,5 @@ Win32NES/Release/Win32NES.pch
 Win32NES/Release/Win32NES.log
 *.log
 *.ilk
+*.nes
+nestest.nes.bak

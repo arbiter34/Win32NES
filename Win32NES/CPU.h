@@ -6,26 +6,27 @@
 #include <stdint.h>
 #include "PPU.h"
 #include "Controller.h"
+#include "Cartridge.h"
 
 class CPU
 {
 	typedef void(CPU::*instructionPointer)(void);
 	typedef void(CPU::*addressingModePointer)(void);	//Not necessary, here for clarity
 
-	typedef enum Interrupts {
-		_None,
-		_NMI,
-		_IRQ
-	};
-
 public:
-	CPU(PPU *ppu, Controller *controller);
+
+	uint32_t cycleCount;
+	/* Interrupt */
+	Interrupts interrupt;
+
+	CPU(PPU *ppu, Controller *controller, Cartridge *cartridge);
 	~CPU();
 
 #pragma region CPU Ops
 
 	void execute();
 	short fetch();
+	void reset();
 
 #pragma endregion
 
@@ -36,31 +37,29 @@ private:
 	/* Devices */
 	PPU *ppu;
 	Controller *controller;
+	Cartridge *cartridge;
 
 	/*Function Tables*/
-	instructionPointer cpuTable[0xFF];
-	addressingModePointer addressingModeTable[0xFF];
-	static const uint8_t instructionCycles[0xFF];
-	static const uint8_t instructionPageCycles[0xFF];
-
-	/* Interrupt */
-	Interrupts interrupt;
+	instructionPointer cpuTable[0x100];
+	addressingModePointer addressingModeTable[0x100];
+	static const uint8_t instructionCycles[0x100];
+	static const uint8_t instructionPageCycles[0x100];
 
 	/*Registers*/
 	uint16_t pc;     // program counter, 16 bits
 	uint8_t sp;       // stack pointer
-	uint8_t s;       // status flags
+	uint8_t p;       // status flags
 	uint8_t a;       // accumulator
 	uint8_t x;       // register x
 	uint8_t y;       // register y
 
 	/*Memory*/
+	uint8_t *cartridge_expansion_rom;
 	uint8_t *prg_rom;
 	uint8_t *cpu_ram;
 	uint8_t *sram;
 
 	/*Misc*/
-	uint32_t cycleCount;
 	uint8_t opcode;
 	uint16_t address;
 	uint8_t src;

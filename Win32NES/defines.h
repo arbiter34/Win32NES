@@ -64,4 +64,31 @@
 #define PPU_STATUS_MORE_THAN_8_SPRITES_HIT 0x20
 #define PPU_STATUS_MORE_THAN_8_SPRITES_RESET 0x00
 
+#define HEADER_SIZE 16
+
+#define PRG_ROM_BYTE 4
+#define CHR_ROM_BYTE 5
+#define PRG_RAM_BYTE 8
+
+#define FOUR_SCREEN_MIRRORING 0x08
+#define HORIZONTAL_MIRRORING 0x00
+#define VERTICAL_MIRRORING 0x01
+
+#define BATTERY_BACKED_SRAM 0x02
+#define TRAINER 0x04
+
+#define MAPPER_MASK 0xF0
+
+#define PRG_ROM_PAGE_SIZE 16384 // 16kb
+#define CHR_ROM_PAGE_SIZE 8192  // 8kb
+#define PRG_RAM_PAGE_SIZE 8192  // 8kb
+
+
+
+typedef enum Interrupts {
+	_None,
+	_NMI,
+	_IRQ
+};
+
 #endif

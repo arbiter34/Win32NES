@@ -3,10 +3,26 @@
 #include "Opcodes.h"
 
 
-CPU::CPU(PPU *ppu, Controller *controller)
+CPU::CPU(PPU *ppu, Controller *controller, Cartridge *cartridge)
 {
 	this->ppu = ppu;
 	this->controller = controller;
+	this->cartridge = cartridge;
+	prg_rom = NULL;
+	cpu_ram = new uint8_t[CPU_RAM_SIZE];
+	sram = new uint8_t[SRAM_SIZE];
+	cartridge_expansion_rom = new uint8_t[0x6000 - 0x4020];
+
+	for (int i = 0; i < CPU_RAM_SIZE; i++) {
+		cpu_ram[i] = 0;
+	}
+	
+	for (int i = 0; i < SRAM_SIZE; i++) {
+		sram[i] = 0;
+	}
+
+	initAddressingModeTable();
+	initCPUTable();
 }
 
 
@@ -15,6 +31,16 @@ CPU::~CPU()
 }
 
 #pragma region CPU Ops
+
+void CPU::reset() {
+	pc = read_address(0xFFFC);    // address to jump to after reset
+	cycleCount = 0;
+	sp = 0xFF;
+	a = 0;
+	p = 1 << 5;
+	x = 0;
+	y = 0;
+}
 
 void CPU::execute()
 {
@@ -30,13 +56,13 @@ void CPU::execute()
 	opcode = fetch();
 
 	//Addressing Mode Decode
-	(this->*addressingModeTable[(opcode & 0xFF) >> 8])();
+	(this->*addressingModeTable[(opcode)])();
 
 	//Instruction Decode
-	(this->*cpuTable[(opcode & 0xFF) >> 8])();
-	cycleCount += instructionCycles[opcode & 0xFF];
+	(this->*cpuTable[(opcode)])();
+	cycleCount += instructionCycles[opcode];
 	if (pageCrossed) {
-		cycleCount += instructionPageCycles[opcode & 0xFF];
+		cycleCount += instructionPageCycles[opcode];
 	}
 
 }
@@ -79,11 +105,11 @@ void CPU::IRQ() {
 #pragma region Get/Set Bits
 
 void CPU::set_bit(uint8_t bit, bool on){
-	on ? s |= bit : s &= bit;
+	on ? p |= bit : p &= ~bit;
 }
 
 bool CPU::get_bit(uint8_t bit){
-	return (s & bit) != 0;
+	return (p & bit) != 0;
 }
 
 void CPU::set_carry(uint8_t value){
@@ -163,10 +189,36 @@ void CPU::cmp_bit_helper(uint8_t reg, uint8_t mem) {
 
 #pragma endregion
 
+#pragma region Debug Print
+
+void __cdecl odprintf(const char *format, ...)
+{
+	char    buf[4096], *p = buf;
+	va_list args;
+	int     n;
+
+	va_start(args, format);
+	n = _vsnprintf(p, sizeof buf - 3, format, args); // buf-3 is room for CR/LF/NUL
+	va_end(args);
+
+	p += (n < 0) ? sizeof buf - 3 : n;
+
+	while (p > buf  &&  isspace(p[-1]))
+		*--p = '\0';
+
+	*p++ = '\r';
+	*p++ = '\n';
+	*p = '\0';
+
+	OutputDebugStringA(buf);
+}
+
+#pragma endregion
+
 #pragma region Memory Ops
 
 uint8_t CPU::read_memory(uint16_t address){
-	uint8_t word;
+	uint8_t word = 0;;
 	/* 2KB of Working RAM*/
 	if (address < 0x2000) {
 		word = cpu_ram[address % 0x7FF];
@@ -207,7 +259,7 @@ uint8_t CPU::read_memory(uint16_t address){
 	}
 	/* PRG-ROM */
 	else if (address >= 0x8000 && address < 0xFFFF) {
-		word = prg_rom[address - 0x800];
+		word = cartridge->read(address - 0x8000);
 	}
 	return word;
 }
@@ -258,7 +310,7 @@ void CPU::store_memory(uint16_t address, uint8_t word){
 	}
 	/* Cartridge Expansion ROM */
 	else if (address >= 0x4020 && address < 0x6000) {
-
+		cartridge_expansion_rom[address - 0x4020] = word;
 	}
 	/* SRAM */
 	else if (address >= 0x6000 && address < 0x8000) {
@@ -266,7 +318,7 @@ void CPU::store_memory(uint16_t address, uint8_t word){
 	}
 	/* PRG-ROM */
 	else if (address >= 0x8000 && address < 0xFFFF) {
-		prg_rom[address - 0x8000] = word;
+		cartridge->write(address - 0x8000, word);
 	}
 }
 
@@ -303,11 +355,11 @@ void CPU::addBranchCycles(uint16_t src, uint16_t dst) {
 
 void CPU::push(uint8_t value){
 	cpu_ram[sp] = value;
-	sp++;
+	sp--;
 }
 
 uint8_t CPU::pop(){
-	sp--;
+	sp++;
 	return cpu_ram[sp];
 }
 
@@ -339,7 +391,7 @@ void CPU::Immediate(){
 	pc += 2;
 }
 void CPU::Implicit() {
-	pc += opcode = 0x00 ? 2 : 1;
+	pc += opcode == 0x00 ? 2 : 1;
 }
 void CPU::Indirect(){
 	uint16_t jmp_address = read_address(pc + 1);
@@ -362,6 +414,7 @@ void CPU::IndirectY(){
 }
 void CPU::Relative() {
 	address = pc + 1;
+	pc += 2;
 }
 void CPU::ZeroPage(){
 	address = read_memory(pc + 1);
@@ -391,6 +444,8 @@ void CPU::ADC() {
 	set_overflow(!((a ^ src) & 0x80) && ((a ^ temp) & 0x80));
 
 	a = (uint8_t)temp;
+
+	odprintf("ADC $%x\n", address);
 }
 void CPU::AND() {
 	src = read_memory(address);
@@ -471,7 +526,7 @@ void CPU::BRK() {
 	push(pc >> 8);
 	push(pc);
 	set_break(1);
-	push(s | (1 << 4));
+	push(p | (1 << 4));
 	set_irq_disable(1);
 	pc = read_address(0xFFFE);
 }
@@ -550,13 +605,13 @@ void CPU::INY() {
 	set_zero(x);
 }
 void CPU::JMP() {
-	pc = read_memory(address);
+	pc = address;
 }
 void CPU::JSR() {
 	pc--;
 	push(pc >> 8);
 	push(pc);
-	pc = read_memory(address);
+	pc = address;
 }
 void CPU::LDA() {
 	a = read_memory(address);
@@ -603,13 +658,13 @@ void CPU::PHA() {
 	push(a);
 }
 void CPU::PHP() {
-	push(s | (1 << 4));
+	push((sp| (1 << 4)| (1 << 3)));
 }
 void CPU::PLA() {
 	a = pop();
 }
 void CPU::PLP() {
-	s = pop();
+	p = pop();
 }
 void CPU::ROL() {
 	if (opcode != 0x2A) {
@@ -644,13 +699,14 @@ void CPU::ROR() {
 	}
 }
 void CPU::RTI() {
-	s = pop();
+	p = pop();
 	pc = pop();
 	pc |= (uint16_t)pop() << 8;
 }
 void CPU::RTS() {
 	pc = pop();
 	pc |= (uint16_t)pop() << 8;
+	pc++;
 }
 void CPU::SBC() {
 	src = read_memory(address);
@@ -750,7 +806,7 @@ void CPU::initAddressingModeTable() {
 	this->addressingModeTable[29] = &CPU::AbsoluteX;
 	this->addressingModeTable[30] = &CPU::AbsoluteX;
 	this->addressingModeTable[31] = &CPU::cpuNULL;
-	this->addressingModeTable[32] = &CPU::Implicit;
+	this->addressingModeTable[32] = &CPU::Absolute;
 	this->addressingModeTable[33] = &CPU::IndirectX;
 	this->addressingModeTable[34] = &CPU::cpuNULL;
 	this->addressingModeTable[35] = &CPU::cpuNULL;
@@ -973,6 +1029,7 @@ void CPU::initAddressingModeTable() {
 	this->addressingModeTable[252] = &CPU::cpuNULL;
 	this->addressingModeTable[253] = &CPU::AbsoluteX;
 	this->addressingModeTable[254] = &CPU::AbsoluteX;
+	this->addressingModeTable[255] = &CPU::cpuNULL;
 
 }
 
@@ -1236,13 +1293,14 @@ void CPU::initCPUTable() {
 	this->cpuTable[252] = &CPU::cpuNULL;
 	this->cpuTable[253] = &CPU::SBC;
 	this->cpuTable[254] = &CPU::INC;
+	this->cpuTable[255] = &CPU::cpuNULL;
 }
 
 #pragma endregion
 
 #pragma region Static Init
 
-const uint8_t CPU::instructionCycles[0xFF] = {
+const uint8_t CPU::instructionCycles[0x100] = {
 	7, 6, 2, 8, 3, 3, 5, 5, 3, 2, 2, 2, 4, 4, 6, 6,
 	2, 5, 2, 8, 4, 4, 6, 6, 2, 4, 2, 7, 4, 4, 7, 7,
 	6, 6, 2, 8, 3, 3, 5, 5, 4, 2, 2, 2, 4, 4, 6, 6,
@@ -1258,10 +1316,10 @@ const uint8_t CPU::instructionCycles[0xFF] = {
 	2, 6, 2, 8, 3, 3, 5, 5, 2, 2, 2, 2, 4, 4, 6, 6,
 	2, 5, 2, 8, 4, 4, 6, 6, 2, 4, 2, 7, 4, 4, 7, 7,
 	2, 6, 2, 8, 3, 3, 5, 5, 2, 2, 2, 2, 4, 4, 6, 6,
-	2, 5, 2, 8, 4, 4, 6, 6, 2, 4, 2, 7, 4, 4, 7
+	2, 5, 2, 8, 4, 4, 6, 6, 2, 4, 2, 7, 4, 4, 7, 3
 };
 
-const uint8_t CPU::instructionPageCycles[0xFF] = {
+const uint8_t CPU::instructionPageCycles[0x100] = {
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -1277,7 +1335,7 @@ const uint8_t CPU::instructionPageCycles[0xFF] = {
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0
+	1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0
 };
 
 #pragma endregion

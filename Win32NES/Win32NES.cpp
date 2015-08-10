@@ -1,4 +1,4 @@
-// Win32Chip8.cpp : Defines the entry point for the application.
+// Win32NES.cpp : Defines the entry point for the application.
 //
 
 #include "stdafx.h"
@@ -6,15 +6,17 @@
 #include "CPU.h"
 #include "PPU.h"
 #include "Controller.h"
-#include "RomLoader.h"
+#include "Cartridge.h"
 #include <conio.h>
 #include <Windows.h>
 #include <shobjidl.h> 
 #include <mmsystem.h>
+#include <shlobj.h>
+#include <shlwapi.h>
 
 #define MAX_LOADSTRING 100
 
-#define HERTZ 500
+#define HERTZ 1789773
 #define TIMER_HERTZ 60
 
 MMRESULT cpuTimerId;
@@ -27,10 +29,10 @@ TCHAR szTitle[MAX_LOADSTRING];					// The title bar text
 TCHAR szWindowClass[MAX_LOADSTRING];			// the main window class name
 HWND hWnd;
 
-CPU cpu;
-PPU ppu;
-Controller controller;
-RomLoader romLoader;
+CPU *cpu;
+PPU *ppu;
+Controller *controller;
+Cartridge *cartridge;
 
 PWSTR romPath;
 BOOL running = false;
@@ -64,13 +66,17 @@ int APIENTRY _tWinMain(_In_ HINSTANCE hInstance,
 	UNREFERENCED_PARAMETER(hPrevInstance);
 	UNREFERENCED_PARAMETER(lpCmdLine);
 
-	ppu = PPU();
-	controller = Controller();
-	cpu = CPU(&ppu, &controller);
+	ppu = new PPU();
+	controller = new Controller();
+	cartridge = new Cartridge();
+	cpu = new CPU(ppu, controller, cartridge);
 
 	MSG msg;
 	HACCEL hAccelTable;
 	HWND hWnd;
+	LARGE_INTEGER StartingTime, EndingTime, ElapsedMicroseconds, Frequency;
+	QueryPerformanceFrequency(&Frequency);
+	int previousCycleCount;
 
 	// Initialize global strings
 	LoadString(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
@@ -92,10 +98,10 @@ int APIENTRY _tWinMain(_In_ HINSTANCE hInstance,
 			if (!TranslateAccelerator(msg.hwnd, hAccelTable, &msg))
 			{
 				if (msg.message == WM_KEYDOWN) {
-					controller.key_down(msg.wParam);
+					controller->key_down(msg.wParam);
 				}
 				else if (msg.message == WM_KEYUP) {
-					controller.key_up(msg.wParam);
+					controller->key_up(msg.wParam);
 				}
 				else if (msg.message == WM_QUIT) {
 					break;
@@ -106,6 +112,25 @@ int APIENTRY _tWinMain(_In_ HINSTANCE hInstance,
 				}
 			}
 		}
+		if (running) {
+			if (cpu->cycleCount > 113) {
+				if (ppu->render_scanline(scanline)) {
+					cpu->interrupt = _NMI;
+				}
+				scanline++;
+				cpu->cycleCount = 0;
+				if (scanline > 261) {
+					scanline = 0;
+				}
+			}
+			QueryPerformanceCounter(&StartingTime);
+			previousCycleCount = cpu->cycleCount;
+			cpu->execute();
+
+			//High-res sleep
+			while ((QueryPerformanceCounter(&EndingTime)) && (((EndingTime.QuadPart - StartingTime.QuadPart) * 1000000000) / Frequency.QuadPart) < ((1000000000 / HERTZ) * (cpu->cycleCount - previousCycleCount))) {}
+		}
+		
 
 	}
 
@@ -241,9 +266,15 @@ PWSTR LoadFile() {
 	// Create the FileOpenDialog object.
 	HRESULT hr = CoCreateInstance(CLSID_FileOpenDialog, NULL, CLSCTX_ALL,
 		IID_IFileOpenDialog, reinterpret_cast<void**>(&pFileOpen));
-
 	if (SUCCEEDED(hr))
 	{
+		IShellItem *psiDocuments = NULL;
+		hr = SHCreateItemInKnownFolder(FOLDERID_Documents, 0, NULL, IID_PPV_ARGS(&psiDocuments));
+
+		if (SUCCEEDED(hr)) {
+			hr = pFileOpen->SetFolder(psiDocuments);
+			psiDocuments->Release();
+		}
 		// Show the Open dialog box.
 		hr = pFileOpen->Show(NULL);
 
@@ -268,11 +299,14 @@ BOOL Run() {
 	if (running) {
 		return false;
 	}
-	running = true;
 	if (romPath == NULL) {
-		romPath = LoadFile();
+		//romPath = LoadFile();
+		romPath = L"C:\\Users\\alperst\\Documents\\Visual Studio 2013\\Projects\\Win32NES\\official_only.nes";
 	}
-	romLoader = RomLoader(romPath);
+	cartridge->loadRom(romPath);
+	cpu->reset();
+	running = true;
+	paused = false;
 	StartTimers();
 	return true;
 }
@@ -282,6 +316,7 @@ BOOL Pause() {
 		return false;
 	}
 	if (paused) {
+		paused = !paused;
 		StartTimers();
 	}
 	else {
@@ -302,15 +337,15 @@ BOOL Restart(HWND hWnd) {
 
 BOOL Stop(HWND hWnd) {
 	StopTimers();
-	chip8.initialize();
 	InvalidateRect(hWnd, NULL, FALSE);
 	running = false;
 	return true;
 }
 
 void StartTimers() {
-	cpuTimerId = timeSetEvent(1000 / HERTZ, 0, (LPTIMECALLBACK)&cpuCycle, NULL, TIME_PERIODIC | TIME_CALLBACK_FUNCTION | TIME_KILL_SYNCHRONOUS);
+	//cpuTimerId = timeSetEvent((1000 / 1789773), 0, (LPTIMECALLBACK)&cpuCycle, NULL, TIME_PERIODIC | TIME_CALLBACK_FUNCTION | TIME_KILL_SYNCHRONOUS);
 	updateScreenId = timeSetEvent(1000 / TIMER_HERTZ, 0, (LPTIMECALLBACK)&updateScreen, NULL, TIME_PERIODIC | TIME_CALLBACK_FUNCTION | TIME_KILL_SYNCHRONOUS);
+
 }
 
 void StopTimers() {
@@ -339,19 +374,52 @@ INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 	return (INT_PTR)FALSE;
 }
 
-
-void CALLBACK cpuCycle(UINT uTimerID, UINT uMsg, DWORD_PTR dwUser, DWORD_PTR dw1, DWORD_PTR dw2) {
-	cpu.execute();
-}
-
 void CALLBACK updateScreen(UINT uTimerID, UINT uMsg, DWORD_PTR dwUser, DWORD_PTR dw1, DWORD_PTR dw2) {
-	UpdateScreen();
+	PAINTSTRUCT ps;
+	HDC hdc = BeginPaint(hWnd, &ps);
+	DrawScreen(hdc);
+	EndPaint(hWnd, &ps);
 }
 
-void DrawScreen(HDC hdc) {
+void DrawScreen(HDC hdc)
+{
+	RECT rect;
 
-}
+	int border = 10;
 
-void UpdateScreen() {
-	InvalidateRect(hWnd, NULL, FALSE);
+	//Paint Background 
+	GetClientRect(WindowFromDC(hdc), &rect);
+	int width = abs(rect.left - rect.right);
+	int height = abs(rect.top - rect.bottom);
+	int widthFactor = width / SCREEN_WIDTH;
+	int heightFactor = height / SCREEN_HEIGHT;
+
+	HDC hdcMem = CreateCompatibleDC(hdc);
+	HBITMAP hbmMem = CreateCompatibleBitmap(hdc, width, height);
+
+	HANDLE hOld = SelectObject(hdcMem, hbmMem);
+
+	HBRUSH brush = CreateSolidBrush(RGB(0, 0, 0));
+	FillRect(hdcMem, &rect, brush);
+
+	DeleteObject(brush);
+
+	for (int i = 0; i < SCREEN_HEIGHT; i++) {
+		for (int j = 0; j < SCREEN_WIDTH; j++) {
+			int r = ppu->screen[i * SCREEN_HEIGHT + j].r;
+			int g = ppu->screen[i * SCREEN_HEIGHT + j].g;
+			int b = ppu->screen[i * SCREEN_HEIGHT + j].b;
+			brush = CreateSolidBrush(RGB(r, g, b));
+			rect.left = border + j * widthFactor;
+			rect.top = border + i * heightFactor;
+			rect.bottom = rect.top + heightFactor;
+			rect.right = rect.left + widthFactor;
+			FillRect(hdcMem, &rect, brush);
+		}
+	}
+	BitBlt(hdc, 0, 0, width, height, hdcMem, 0, 0, SRCCOPY);
+	SelectObject(hdcMem, hOld);
+	DeleteObject(hbmMem);
+	DeleteDC(hdcMem);
+	DeleteObject(brush);
 }
