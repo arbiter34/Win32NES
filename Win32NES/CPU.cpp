@@ -2,7 +2,6 @@
 #include "CPU.h"
 #include "Opcodes.h"
 
-
 CPU::CPU(PPU *ppu, Controller *controller, Cartridge *cartridge)
 {
 	this->ppu = ppu;
@@ -44,6 +43,14 @@ void CPU::reset() {
 
 void CPU::execute()
 {
+	if (pc == 0xEB05) {
+		pc = pc;
+	}
+	if (stall > 0) {
+		stall--;
+		return;
+	}
+
 	if (interrupt == _NMI) {
 		NMI();
 	}
@@ -64,7 +71,6 @@ void CPU::execute()
 	if (pageCrossed) {
 		cycleCount += instructionPageCycles[opcode];
 	}
-
 }
 
 
@@ -125,7 +131,7 @@ void CPU::set_zero(uint8_t value){
 }
 
 bool CPU::get_zero() {
-	return get_bit(1 << 1);
+	return get_bit((1 << 1));
 }
 
 void CPU::set_irq_disable(uint8_t value){
@@ -169,27 +175,58 @@ bool CPU::get_negative() {
 }
 
 void CPU::cmp_bit_helper(uint8_t reg, uint8_t mem) {
-	if (reg < mem) {
-		set_negative(0x80);
-		set_zero(1);
-		set_carry(0);
-	}
-	else if (reg == mem) {
-		set_negative(0);
-		set_zero(0);
+	set_zero(reg - mem);
+	if (reg >= mem) {
 		set_carry(1);
 	}
 	else {
-		set_negative(0);
-		set_zero(1);
-		set_carry(1);
+		set_carry(0);
 	}
+	set_negative(reg - mem);
 }
 
 
 #pragma endregion
 
 #pragma region Debug Print
+
+void printAddress(uint16_t pc, uint8_t opcode, uint16_t address) {
+#ifdef DEBUG || DEBUG_LOG
+	char buff[255];
+	sprintf(buff, "\n%-6.4X%-3X%-6X", pc, opcode, address);
+#endif
+
+#ifdef DEBUG
+	odprintf("%s", buff);
+#endif
+
+#ifdef DEBUG_LOG
+	FILE *fp = fopen("output.log", "ab");
+	if (fp != NULL) {
+		fputs(buff, fp);
+		fclose(fp);
+	}
+#endif
+}
+
+void printOpcode(const char* opcode, uint16_t address, uint8_t a, uint8_t x, uint8_t y, uint8_t p, uint8_t sp, uint16_t cycleCount) {
+#ifdef DEBUG || DEBUG_LOG
+	char buff[255];
+	sprintf(buff, "%-4s$%-28XA:%-3XX:%-3XY:%-3XP:%-3XSP:%-3XCYC:%-3d", opcode, address, a, x, y, p, sp, cycleCount);
+#endif
+
+#ifdef DEBUG
+	odprintf("%s", buff);
+#endif
+
+#ifdef DEBUG_LOG
+	FILE *fp = fopen("output.log", "ab");
+	if (fp != NULL) {
+		fputs(buff, fp);
+		fclose(fp);
+	}
+#endif
+}
 
 void __cdecl odprintf(const char *format, ...)
 {
@@ -203,11 +240,11 @@ void __cdecl odprintf(const char *format, ...)
 
 	p += (n < 0) ? sizeof buf - 3 : n;
 
-	while (p > buf  &&  isspace(p[-1]))
-		*--p = '\0';
+	//while (p > buf  &&  isspace(p[-1]))
+	//	*--p = '\0';
 
-	*p++ = '\r';
-	*p++ = '\n';
+	//*p++ = '\r';
+	//*p++ = '\n';
 	*p = '\0';
 
 	OutputDebugStringA(buf);
@@ -221,26 +258,19 @@ uint8_t CPU::read_memory(uint16_t address){
 	uint8_t word = 0;;
 	/* 2KB of Working RAM*/
 	if (address < 0x2000) {
-		word = cpu_ram[address % 0x7FF];
+		word = cpu_ram[address & 0x7FF];
 	}
 	/* PPU Ctrl Registers - Mirrored 1023 Times*/
 	else if (address >= 0x2000 && address < 0x4000) {
-		switch (address & 0x07) {
-			case 0x00:
-				return ppu->read_control1();
-			case 0x01: 
-				return ppu->read_control2();
-			case 0x02:
-				return ppu->read_status();
-			case 0x04: 
-				return ppu->read_sprite_data();
-			case 0x07:
-				return ppu->read_vram_data();
-		}
+		ppu->readRegister(0x2000 + (address & 0x07));
 	}
 	/* Registers (Mostly APU) */
 	else if (address >= 0x4000 && address < 0x4020) {
 		switch (address) {
+			case 0x4014:
+				return ppu->readRegister(address);
+			case 0x4015:
+				return 0;
 			case 0x4016:
 				return controller->read_controller_state(1);
 			case 0x4017:
@@ -265,41 +295,22 @@ uint8_t CPU::read_memory(uint16_t address){
 }
 
 void CPU::store_memory(uint16_t address, uint8_t word){
+	if (address == 0) {
+		address = address;
+	}
 	/* 2KB of Working RAM*/
 	if (address < 0x2000) {
-		cpu_ram[address] = word;
+		cpu_ram[address & 0x7FF] = word;
 	}
 	/* PPU Ctrl Registers - Mirrored 1023 Times*/
 	else if (address >= 0x2000 && address < 0x4000) {
-		switch (address & 0x07) {
-			case 0x00:
-				ppu->write_control1(word);
-				break;
-			case 0x01:
-				ppu->write_control2(word);
-				break;
-			case 0x03:
-				ppu->set_sprite_memory_address(word);
-				break;
-			case 0x04:
-				ppu->write_sprite_data(word);
-				break;
-			case 0x05:
-				ppu->write_scroll_register(word);
-				break;
-			case 0x06:
-				ppu->write_vram_address(word);
-				break;
-			case 0x07:
-				ppu->write_vram_data(word);
-				break;
-		}
+		ppu->writeRegister(0x2000 + (address & 0x07), word);
 	}
 	/* Registers (Mostly APU) */
 	else if (address >= 0x4000 && address < 0x4020) {
 		switch (address) {
 			case 0x4014:
-				ppu->write_spr_ram((char *)(cpu_ram + word * 0x100));
+				ppu->writeRegister(address, word);
 				break;
 			case 0x4016:
 				controller->write_value(word);
@@ -326,8 +337,14 @@ uint16_t CPU::read_address(uint16_t address){
 	return (uint16_t)(read_memory(address + 1) << 8) + read_memory(address);
 }
 
+uint16_t CPU::read_address_bug(uint16_t address) {
+	uint16_t first_byte = address;
+	uint16_t second_byte = (address & 0xFF00) | (uint8_t)(first_byte + 1);
+	return (uint16_t)(read_memory(second_byte) << 8) + read_memory(first_byte);
+}
+
 uint16_t CPU::relative_address(uint16_t address, uint8_t offset) {
-	if (offset & 0x80) {
+	if ((offset & 0x80) != 0) {
 		return address - (uint8_t)(~offset + 1);
 	}
 	else {
@@ -354,13 +371,13 @@ void CPU::addBranchCycles(uint16_t src, uint16_t dst) {
 #pragma region Stack Ops
 
 void CPU::push(uint8_t value){
-	cpu_ram[sp] = value;
+	cpu_ram[0x100|(uint16_t)sp] = value;
 	sp--;
 }
 
 uint8_t CPU::pop(){
 	sp++;
-	return cpu_ram[sp];
+	return cpu_ram[0x100 | (uint16_t)sp];
 }
 
 #pragma endregion
@@ -369,28 +386,34 @@ uint8_t CPU::pop(){
 
 void CPU::Absolute(){
 	address = read_address(pc + 1);
+	printAddress(pc, opcode, address);
 	pc += 3;
 }
 void CPU::AbsoluteX(){
 	address = read_address(pc + 1) + x;
+	printAddress(pc, opcode, address);
 	pageCrossed = pageDiff(address - (uint16_t)x, address);
 	pc += 3;
 }
 void CPU::AbsoluteY(){
 	address = read_address(pc + 1) + y;
+	printAddress(pc, opcode, address);
 	pageCrossed = pageDiff(address - (uint16_t)y, address);
 	pc += 3;
 }
 void CPU::Accumulator(){
 	address = 0;
 	src = a;
-	pc += 2;
+	printAddress(pc, opcode, address);
+	pc += 1;
 }
 void CPU::Immediate(){
 	address = pc + 1;
+	printAddress(pc, opcode, address);
 	pc += 2;
 }
 void CPU::Implicit() {
+	printAddress(pc, opcode, 0);
 	pc += opcode == 0x00 ? 2 : 1;
 }
 void CPU::Indirect(){
@@ -401,31 +424,38 @@ void CPU::Indirect(){
 	else {
 		address = read_address(jmp_address);
 	}
+	printAddress(pc, opcode, address);
 	pc += 3;
 }
 void CPU::IndirectX(){
-	address = read_address(read_memory(pc + 1) + x) & 0xFF;
+	address = read_address_bug((read_memory(pc + 1) + x) & 0xFF);
+	printAddress(pc, opcode, address);
 	pc += 2;
 }
 void CPU::IndirectY(){
-	address = read_address(read_memory(pc + 1)) + y;
+	address = read_address_bug(read_memory(pc + 1)) + y;
 	pageCrossed = pageDiff(address - (uint16_t)x, address);
+	printAddress(pc, opcode, address);
 	pc += 2;
 }
 void CPU::Relative() {
 	address = pc + 1;
+	printAddress(pc, opcode, address);
 	pc += 2;
 }
 void CPU::ZeroPage(){
 	address = read_memory(pc + 1);
+	printAddress(pc, opcode, address);
 	pc += 2;
 }
 void CPU::ZeroPageX(){
 	address = (read_memory(pc + 1) + x) & 0xFF;
+	printAddress(pc, opcode, address);
 	pc += 2;
 }
 void CPU::ZeroPageY(){
 	address = (read_memory(pc + 1) + y) & 0xFF;
+	printAddress(pc, opcode, address);
 	pc += 2;
 }
 
@@ -445,13 +475,14 @@ void CPU::ADC() {
 
 	a = (uint8_t)temp;
 
-	odprintf("ADC $%x\n", address);
+	printOpcode("ADC", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::AND() {
 	src = read_memory(address);
 	a &= src;
 	set_negative(a);
 	set_zero(a);
+	printOpcode("AND", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::ASL() {
 	if (opcode != 0x0A) {
@@ -459,7 +490,7 @@ void CPU::ASL() {
 	}
 
 	set_carry(src & 0x80);
-	src <<= 1;
+	src = (uint8_t)src << 1;
 	set_zero(src);
 	set_negative(src);
 
@@ -467,8 +498,9 @@ void CPU::ASL() {
 		a = src;
 	}
 	else {
-		store_memory(address, a);
+		store_memory(address, src);
 	}
+	printOpcode("ASL", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::BCC() {
 	if (!get_carry()) {
@@ -476,6 +508,7 @@ void CPU::BCC() {
 		pc = relative_address(pc, read_memory(address));
 		addBranchCycles(temp, pc);
 	}
+	printOpcode("BCC", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::BCS() {
 	if (get_carry()) {
@@ -483,6 +516,7 @@ void CPU::BCS() {
 		pc = relative_address(pc, read_memory(address));
 		addBranchCycles(temp, pc);
 	}
+	printOpcode("BCS", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::BEQ() {
 	if (get_zero()) {
@@ -490,16 +524,14 @@ void CPU::BEQ() {
 		pc = relative_address(pc, read_memory(address));
 		addBranchCycles(temp, pc);
 	}
+	printOpcode("BEQ", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::BIT() {
 	src = read_memory(address);
-	if (src & (1 << 7)) {
-		set_negative(0);
-	} 
-	if (src & (1 << 6)) {
-		set_overflow(1);
-	}
-	set_zero(src);
+	set_negative(src);
+	set_overflow(((1 << 6) & src) != 0);
+	set_zero(src & a);
+	printOpcode("BIT", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::BMI() {
 	if (get_negative()) {
@@ -507,6 +539,7 @@ void CPU::BMI() {
 		pc = relative_address(pc, read_memory(address));
 		addBranchCycles(temp, pc);
 	}
+	printOpcode("BMI", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::BNE() {
 	if (!get_zero()) {
@@ -514,6 +547,7 @@ void CPU::BNE() {
 		pc = relative_address(pc, read_memory(address));
 		addBranchCycles(temp, pc);
 	}
+	printOpcode("BNE", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::BPL() {
 	if (!get_negative()) {
@@ -521,6 +555,7 @@ void CPU::BPL() {
 		pc = relative_address(pc, read_memory(address));
 		addBranchCycles(temp, pc);
 	}
+	printOpcode("BPL", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::BRK() {
 	push(pc >> 8);
@@ -529,40 +564,50 @@ void CPU::BRK() {
 	push(p | (1 << 4));
 	set_irq_disable(1);
 	pc = read_address(0xFFFE);
+	printOpcode("BRK", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::BVC() {
 	if (!get_overflow()) {
 		pc = relative_address(pc, read_memory(address));
 	}
+	printOpcode("BVC", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::BVS() {
 	if (get_overflow()) {
 		pc = relative_address(pc, read_memory(address));
 	}
+	printOpcode("BVS", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::CLC() {
 	set_carry(0);
+	printOpcode("CLC", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::CLD() {
 	set_decimal(0);
+	printOpcode("CLD", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::CLI() {
 	set_irq_disable(0);
+	printOpcode("CLI", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::CLV() {
 	set_overflow(0);
+	printOpcode("CLV", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::CMP() {
 	src = read_memory(address);
 	cmp_bit_helper(a, src);
+	printOpcode("CMP", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::CPX() {
 	src = read_memory(address);
 	cmp_bit_helper(x, src);
+	printOpcode("CPX", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::CPY() {
 	src = read_memory(address);
 	cmp_bit_helper(y, src);
+	printOpcode("CPY", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::DEC() {
 	src = read_memory(address);
@@ -570,22 +615,26 @@ void CPU::DEC() {
 	set_negative(src);
 	set_zero(src);
 	store_memory(address, src);
+	printOpcode("DEC", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::DEX() {
 	x -= 1;
 	set_negative(x);
 	set_zero(x);
+	printOpcode("DEX", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::DEY() {
 	y -= 1;
 	set_negative(y);
 	set_zero(y);
+	printOpcode("DEY", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::EOR() {
 	src = read_memory(address);
 	a ^= src;
 	set_negative(a);
 	set_zero(a);
+	printOpcode("EOR", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::INC() {
 	src = read_memory(address);
@@ -593,40 +642,48 @@ void CPU::INC() {
 	set_negative(src);
 	set_zero(src);
 	store_memory(address, src);
+	printOpcode("INC", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::INX() {
 	x += 1;
 	set_negative(x);
 	set_zero(x);
+	printOpcode("INX", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::INY() {
 	y += 1;
 	set_negative(y);
-	set_zero(x);
+	set_zero(y);
+	printOpcode("INY", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::JMP() {
 	pc = address;
+	printOpcode("JMP", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::JSR() {
 	pc--;
 	push(pc >> 8);
 	push(pc);
 	pc = address;
+	printOpcode("JSR", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::LDA() {
 	a = read_memory(address);
 	set_zero(a);
 	set_negative(a);
+	printOpcode("LDA", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::LDX() {
 	x = read_memory(address);
 	set_zero(x);
 	set_negative(x);
+	printOpcode("LDX", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::LDY() {
 	y = read_memory(address);
 	set_zero(y);
 	set_negative(y);
+	printOpcode("LDY", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::LSR() {
 	if (opcode != 0x4A) {
@@ -644,35 +701,44 @@ void CPU::LSR() {
 	else {
 		store_memory(address, src);
 	}
+	printOpcode("LSR", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::NOP() {
-
+	printOpcode("NOP", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::ORA() {
 	src = read_memory(address);
 	a |= src;
 	set_zero(a);
 	set_negative(a);
+	printOpcode("ORA", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::PHA() {
 	push(a);
+	printOpcode("PHA", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::PHP() {
-	push((sp| (1 << 4)| (1 << 3)));
+	push((p | 0x10));
+	printOpcode("PHP", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::PLA() {
 	a = pop();
+	set_zero(a);
+	set_negative(a);
+	printOpcode("PLA", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::PLP() {
-	p = pop();
+	p = pop() & 0xEF | 0x20;
+	printOpcode("PLP", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::ROL() {
 	if (opcode != 0x2A) {
 		src = read_memory(address);
 	}
+	uint8_t c = get_carry();
 	set_carry(src & 0x80);
 	src <<= 1;
-	src &= (get_carry() ? 1 : 0);
+	src |= c;
 	set_negative(src);
 	set_zero(src);
 	if (opcode == 0x2A) {
@@ -681,14 +747,16 @@ void CPU::ROL() {
 	else {
 		store_memory(address, src);
 	}
+	printOpcode("ROL", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::ROR() {
 	if (opcode != 0x6A) {
 		src = read_memory(address);
 	}
+	uint8_t c = get_carry();
 	set_carry(src & 0x01);
 	src >>= 1;
-	src &= (get_carry() ? 1 : 0);
+	src |= (c << 7);
 	set_negative(src);
 	set_zero(src);
 	if (opcode == 0x6A) {
@@ -697,76 +765,102 @@ void CPU::ROR() {
 	else {
 		store_memory(address, src);
 	}
+	printOpcode("ROR", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::RTI() {
-	p = pop();
+	p = pop() & 0xEF | 0x20;
 	pc = pop();
 	pc |= (uint16_t)pop() << 8;
+	printOpcode("RTI", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::RTS() {
 	pc = pop();
 	pc |= (uint16_t)pop() << 8;
 	pc++;
+	printOpcode("RTS", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::SBC() {
 	src = read_memory(address);
 
-	temp = (uint16_t)(a - src - (get_carry() ? 1 : 0));
-
-	set_negative(temp);
-	set_zero(temp & 0xFF);
-	set_carry((src + (get_carry() ? 1 : 0)) > a);
-	set_overflow(!((a ^ src) & 0x01) && ((a ^ temp) & 0x01));
+	temp = (uint16_t)(a - src - (get_carry() ? 0 : 1));
+	set_negative((uint8_t)temp);
+	set_zero((uint8_t)temp);
+	if (a >= (src + (get_carry() ? 0 : 1))) {
+		set_carry(1);
+	}
+	else {
+		set_carry(0);
+	}
+	if (((a ^ src) & 0x80) != 0 && ((a ^ temp) & 0x80) != 0) {
+		set_overflow(1);
+	}
+	else {
+		set_overflow(0);
+	}
 
 	a = (uint8_t)temp;
+	printOpcode("SBC", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::SEC() {
 	set_carry(1);
+	printOpcode("SEC", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::SED() {
 	set_decimal(1);
+	printOpcode("SED", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::SEI() {
 	set_irq_disable(1);
+	printOpcode("SEI", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::STA() {
 	store_memory(address, a);
+	printOpcode("STA", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::STX() {
+	if (address & 0x7FF == 0x7FF) {
+		address = address;
+	}
 	store_memory(address, x);
+	printOpcode("STX", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::STY() {
 	store_memory(address, y);
+	printOpcode("STY", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::TAX() {
 	x = a;
 	set_negative(x);
 	set_zero(x);
+	printOpcode("TAX", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::TAY() {
 	y = a;
 	set_negative(y);
 	set_zero(y);
+	printOpcode("TAY", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::TSX() {
 	x = sp;
 	set_zero(x);
 	set_negative(x);
+	printOpcode("TSX", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::TXA() {
 	a = x;
 	set_negative(a);
 	set_zero(a);
+	printOpcode("TXA", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::TXS() {
 	sp = x;
-	set_zero(sp);
-	set_negative(sp);
+	printOpcode("TXS", address, a, x, y, p, sp, cycleCount);
 }
 void CPU::TYA() {
 	a = y;
 	set_zero(a);
 	set_negative(a);
+	printOpcode("TYA", address, a, x, y, p, sp, cycleCount);
 }
 
 #pragma endregion

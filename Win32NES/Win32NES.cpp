@@ -27,7 +27,7 @@ MMRESULT updateScreenId;
 HINSTANCE hInst;								// current instance
 TCHAR szTitle[MAX_LOADSTRING];					// The title bar text
 TCHAR szWindowClass[MAX_LOADSTRING];			// the main window class name
-HWND hWnd;
+HWND _hWnd;
 
 CPU *cpu;
 PPU *ppu;
@@ -35,8 +35,11 @@ Controller *controller;
 Cartridge *cartridge;
 
 PWSTR romPath;
-BOOL running = false;
+static volatile BOOL running = false;
 BOOL paused = false;
+
+HANDLE threadHandle;
+DWORD emulationThreadId;
 
 // Forward declarations of functions included in this code module:
 ATOM				MyRegisterClass(HINSTANCE hInstance);
@@ -50,6 +53,8 @@ void StartTimers();
 void StopTimers();
 void DrawScreen(HDC hdc);
 void UpdateScreen();
+
+DWORD WINAPI emulationThread(LPVOID lpParameter);
 
 LRESULT CALLBACK	WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK	About(HWND, UINT, WPARAM, LPARAM);
@@ -70,13 +75,11 @@ int APIENTRY _tWinMain(_In_ HINSTANCE hInstance,
 	controller = new Controller();
 	cartridge = new Cartridge();
 	cpu = new CPU(ppu, controller, cartridge);
+	ppu->setCPU(cpu);
 
 	MSG msg;
 	HACCEL hAccelTable;
 	HWND hWnd;
-	LARGE_INTEGER StartingTime, EndingTime, ElapsedMicroseconds, Frequency;
-	QueryPerformanceFrequency(&Frequency);
-	int previousCycleCount;
 
 	// Initialize global strings
 	LoadString(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
@@ -88,7 +91,7 @@ int APIENTRY _tWinMain(_In_ HINSTANCE hInstance,
 	{
 		return FALSE;
 	}
-
+	_hWnd = hWnd;
 	hAccelTable = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_WIN32NES));
 
 	// Main message loop:
@@ -112,24 +115,7 @@ int APIENTRY _tWinMain(_In_ HINSTANCE hInstance,
 				}
 			}
 		}
-		if (running) {
-			if (cpu->cycleCount > 113) {
-				if (ppu->render_scanline(scanline)) {
-					cpu->interrupt = _NMI;
-				}
-				scanline++;
-				cpu->cycleCount = 0;
-				if (scanline > 261) {
-					scanline = 0;
-				}
-			}
-			QueryPerformanceCounter(&StartingTime);
-			previousCycleCount = cpu->cycleCount;
-			cpu->execute();
 
-			//High-res sleep
-			while ((QueryPerformanceCounter(&EndingTime)) && (((EndingTime.QuadPart - StartingTime.QuadPart) * 1000000000) / Frequency.QuadPart) < ((1000000000 / HERTZ) * (cpu->cycleCount - previousCycleCount))) {}
-		}
 		
 
 	}
@@ -180,7 +166,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow, HWND *hWnd)
 	hInst = hInstance; // Store instance handle in our global variable
 
 	*hWnd = CreateWindow(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
-		CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, NULL, NULL, hInstance, NULL);
+		CW_USEDEFAULT, 0, 550, 550, NULL, NULL, hInstance, NULL);
 
 	if (!*hWnd)
 	{
@@ -300,8 +286,8 @@ BOOL Run() {
 		return false;
 	}
 	if (romPath == NULL) {
-		//romPath = LoadFile();
-		romPath = L"C:\\Users\\alperst\\Documents\\Visual Studio 2013\\Projects\\Win32NES\\official_only.nes";
+		romPath = LoadFile();
+		romPath = L"C:\\Users\\alperst\\Documents\\Visual Studio 2013\\Projects\\Win32NES\\01-abs_x_wrap.nes";
 	}
 	cartridge->loadRom(romPath);
 	cpu->reset();
@@ -329,6 +315,7 @@ BOOL Pause() {
 BOOL Restart(HWND hWnd) {
 	if (running) {
 		Stop(hWnd);
+		Sleep(1);
 		Run();
 		return true;
 	}
@@ -343,9 +330,9 @@ BOOL Stop(HWND hWnd) {
 }
 
 void StartTimers() {
-	//cpuTimerId = timeSetEvent((1000 / 1789773), 0, (LPTIMECALLBACK)&cpuCycle, NULL, TIME_PERIODIC | TIME_CALLBACK_FUNCTION | TIME_KILL_SYNCHRONOUS);
 	updateScreenId = timeSetEvent(1000 / TIMER_HERTZ, 0, (LPTIMECALLBACK)&updateScreen, NULL, TIME_PERIODIC | TIME_CALLBACK_FUNCTION | TIME_KILL_SYNCHRONOUS);
-
+	emulationThreadId;
+	threadHandle = CreateThread(0, 0, emulationThread, NULL, 0, &emulationThreadId);
 }
 
 void StopTimers() {
@@ -374,11 +361,53 @@ INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 	return (INT_PTR)FALSE;
 }
 
+void __cdecl odprintfs(const char *format, ...)
+{
+	char    buf[4096], *p = buf;
+	va_list args;
+	int     n;
+
+	va_start(args, format);
+	n = _vsnprintf(p, sizeof buf - 3, format, args); // buf-3 is room for CR/LF/NUL
+	va_end(args);
+
+	p += (n < 0) ? sizeof buf - 3 : n;
+
+	while (p > buf  &&  isspace(p[-1]))
+		*--p = '\0';
+	
+	*p++ = '\r';
+	*p++ = '\n';
+	*p = '\0';
+
+	OutputDebugStringA(buf);
+}
+
+DWORD WINAPI emulationThread(LPVOID lpParameter) {
+	LARGE_INTEGER StartingTime, EndingTime, ElapsedMicroseconds, Frequency, TestTime;
+	QueryPerformanceFrequency(&Frequency);
+	int previousCycleCount;
+	QueryPerformanceCounter(&TestTime);
+	while (running) {
+		if (cpu->cycleCount > 113) {
+			QueryPerformanceCounter(&EndingTime);
+			odprintfs("\n%1.6f mHz \n", ((float)(1000000000 / (((((EndingTime.QuadPart - TestTime.QuadPart) / cpu->cycleCount) * 1000000000) / (Frequency.QuadPart * 1000))))) / 1000000.0f);
+			ppu->Step();
+			cpu->cycleCount = 0;
+			QueryPerformanceCounter(&TestTime);
+		}
+		QueryPerformanceCounter(&StartingTime);
+		previousCycleCount = cpu->cycleCount;
+		cpu->execute();
+
+		//High-res sleep
+		while ((QueryPerformanceCounter(&EndingTime)) && (((EndingTime.QuadPart - StartingTime.QuadPart) * 1000000000) / (Frequency.QuadPart * 1000)) < ((1000000000 / HERTZ) * (cpu->cycleCount - previousCycleCount))) {}
+	}
+	return 0;
+}
+
 void CALLBACK updateScreen(UINT uTimerID, UINT uMsg, DWORD_PTR dwUser, DWORD_PTR dw1, DWORD_PTR dw2) {
-	PAINTSTRUCT ps;
-	HDC hdc = BeginPaint(hWnd, &ps);
-	DrawScreen(hdc);
-	EndPaint(hWnd, &ps);
+	InvalidateRect(_hWnd, NULL, FALSE);
 }
 
 void DrawScreen(HDC hdc)

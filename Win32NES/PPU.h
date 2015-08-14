@@ -2,94 +2,136 @@
 #include <stdint.h>
 #include "defines.h"
 #include "Palette.h"
+#include "CPU.h"
+
+//PPUCTRL Bitmasks
+#define NAME_TABLE 0x1
+#define INCREMENT 0x4
+#define SPRITE_TABLE 0x8
+#define BACKGROUND_TABLE 0x10
+#define SPRITE_SIZE 0x20
+#define MASTER_SLAVE 0x40
+#define NMI_OUTPUT 0x80
+
+//PPUMASK Bitmasks
+#define GRAYSCALE 0x01
+#define SHOW_LEFT_BACKGROUND 0x02
+#define SHOW_LEFT_SPRITES 0x04
+#define SHOW_BACKGROUND 0x08
+#define SHOW_SPRITES 0x10
+#define RED_TINT 0x20
+#define GREEN_TINT 0x40
+#define BLUE_TINT 0x80
+
+//PPUSTATUS Bitmasks
+#define SPRITE_OVERFLOW 0x20
+#define SPRITE_ZERO_HIT 0x40
+
+class CPU;
 
 class PPU
 {	
-	// 16 bytes per pattern
-	static const int cPATTERN_SIZE = 16;
 public:
-
-	color_t screen[SCREEN_WIDTH * SCREEN_HEIGHT];
 
 	PPU();
 	~PPU();
 
-	bool render_scanline(int scanline);
-	void set_chr_rom(uint8_t *chr_rom);
+	color_t *screen;
 
-	void write_control1(uint8_t word);
-	void write_control2(uint8_t word);
-	void set_sprite_memory_address(uint8_t word);
-	void write_sprite_data(uint8_t word);
-	void write_scroll_register(uint8_t word);
-	void write_vram_address(uint8_t word);
-	void write_vram_data(uint8_t word);
-	void write_spr_ram(char* start);
-	uint8_t read_control1();            
-	uint8_t read_control2();			
-	uint8_t read_status();			
-	uint8_t read_sprite_data();			
-	uint8_t read_vram_data();
+	void setCPU(CPU *cpu);
+	void reset();
+
+
+	uint32_t cycle;
+	uint32_t scanline;
+	uint64_t frame;
+
+
+	void tick();
+	void Step();
+
+	uint8_t readPalette(uint16_t address);
+	void writePalette(uint16_t address, uint8_t word);
+	uint8_t readRegister(uint16_t address);
+	void writeRegister(uint16_t address, uint8_t word);
+	void writeControl(uint8_t word);
+	void writeMask(uint8_t word);
+	uint8_t readStatus();
+	void writeOAMAddress(uint8_t word);
+	uint8_t readOAMData();
+	void writeOAMData(uint8_t word);
+	void writeScroll(uint8_t word);
+	void writeAddress(uint8_t word);
+	uint8_t readData();
+	void writeData(uint8_t word);
+	void writeDMA(uint8_t word);
 
 private:
 
-	uint8_t vram[VRAM_SIZE];
-	uint8_t spr_ram[SPR_RAM_SIZE];
-	
-	uint8_t control_1;
-	uint8_t control_2;
-	uint8_t status;
-	uint8_t sprite_mem_address;
+#pragma region Vars
+	CPU *cpu;
 
-	uint8_t read_buffer;
+	uint8_t paletteData[32];
+	uint8_t nameTableData[2048];
+	uint8_t oamData[256];
+	color_t front[SCREEN_WIDTH*SCREEN_HEIGHT];
+	color_t back[SCREEN_WIDTH*SCREEN_HEIGHT];
 
-	// PPU Scroll Registers
-	uint8_t regFV; // Fine vertical scroll latch
-	uint8_t regV;  // Vertical name table selection latch
-	uint8_t regH;  // Horizontal name table selection latch
-	uint8_t regVT; // Vertical tile index latch
-	uint8_t regHT; // Horizontal tile index latch
-	uint8_t regFH; // Fine horizontal scroll latch
-	uint8_t regS;  // Playfield pattern selection table latch
+	uint16_t v;		//current vram address
+	uint16_t t;		//temp vram address
+	uint8_t x;		//fine x scroll
+	uint8_t w;		//write toggle
+	uint8_t f;		//even/odd frame flag
 
-	// PPU Scroll counters
-	uint8_t cntFV;
-	uint8_t cntV;
-	uint8_t cntH;
-	uint8_t cntVT;
-	uint8_t cntHT;
+	uint8_t reg;
 
-	bool first_write;
+	//NMI Flags
+	bool nmiOccurred;
+	bool nmiOutput;
+	bool nmiPrevious;
+	uint8_t nmiDelay;
 
-	color_t get_pixel(int x, int y);
-	void draw_pixel(int x, int y, color_t color);
-	uint8_t color_index_for_pattern_bit(int x, uint16_t pattern_start, int palette_select, bool sprite);
-	void print_pattern(int pattern_num);
-	void render_scanline_display(int scanline);
+	// background temporary variables
+	uint8_t nameTableByte;
+	uint8_t attributeTableByte;
+	uint8_t lowTileByte;
+	uint8_t highTileByte;
+	uint64_t tileData;
 
-	uint16_t calculate_effective_address(uint16_t address);
-	uint8_t read_memory(uint16_t address);
-	void store_memory(uint16_t address, uint8_t word);
+	// sprite temporary variables
+	uint32_t spriteCount;
+	uint32_t spritePatterns[8];
+	uint8_t spritePositions[8];
+	uint8_t spritePriorities[8];
+	uint8_t spriteIndexes[8];
 
-	void reset_vblank_flag();
-	void reset_sprite_0_flag();
-	void set_sprite_0_flag();
+	uint8_t PPUCTRL;
+	uint8_t PPUMASK;
+	uint8_t PPUSTATUS;
+	uint8_t OAMADDR;
+	uint8_t PPUDATA;
 
-	void reset_more_than_8_sprites_flag();
-	void set_more_than_8_sprites_flag();
+#pragma endregion
 
-	uint16_t vram_address();
-	uint16_t nametable_address();
-	uint16_t attributetable_address();
-	uint16_t patterntable_address();
+	void drawPixel(uint32_t x, uint32_t y, color_t color);
 
-	uint8_t palette_select_bits();
-
-	void increment_scroll_counters();
-	void increment_horizontal_scroll_counter();
-	void increment_vertical_scroll_counter();
-	void update_scroll_counters_from_registers();
-
-	bool is_screen_enabled();
+	void incrementX();
+	void incrementY();
+	void copyX();
+	void copyY();
+	void nmiChange();
+	void setVerticalBlank();
+	void clearVerticalBlank();
+	void fetchNameTableByte();
+	void fetchAttributeTableByte();
+	void fetchLowTileByte();
+	void fetchHighTileByte();
+	void storeTileData();
+	uint32_t fetchTileData();
+	uint8_t backgroundPixel();
+	uint16_t spritePixel();
+	void renderPixel();
+	uint32_t fetchSpritePattern(int col, int row);
+	void evaluateSprites();
 };
 

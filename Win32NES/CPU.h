@@ -8,8 +8,14 @@
 #include "Controller.h"
 #include "Cartridge.h"
 
+#define DEBUG 1
+#define DEBUG_LOG 1
+
+void __cdecl odprintf(const char *format, ...);
+
 class CPU
 {
+	friend class PPU;
 	typedef void(CPU::*instructionPointer)(void);
 	typedef void(CPU::*addressingModePointer)(void);	//Not necessary, here for clarity
 
@@ -27,6 +33,19 @@ public:
 	void execute();
 	short fetch();
 	void reset();
+
+#pragma endregion
+
+protected:
+	int stall;
+
+#pragma region Memory Ops
+
+	uint8_t read_memory(uint16_t address);
+	void store_memory(uint16_t address, uint8_t word);
+	uint16_t read_address(uint16_t address);
+	uint16_t read_address_bug(uint16_t address);
+	uint16_t relative_address(uint16_t address, uint8_t offset);
 
 #pragma endregion
 
@@ -108,15 +127,6 @@ private:
 	 bool get_negative();
 
 	 void cmp_bit_helper(uint8_t reg, uint8_t mem);
-#pragma endregion
-
-#pragma region Memory Ops
-
-	 uint8_t read_memory(uint16_t address);
-	 void store_memory(uint16_t address, uint8_t word);
-	 uint16_t read_address(uint16_t address);
-	 uint16_t relative_address(uint16_t address, uint8_t offset);
-
 #pragma endregion
 
 #pragma region Misc
