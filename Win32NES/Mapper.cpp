@@ -17,7 +17,6 @@ Mapper::~Mapper()
 
 uint8_t Mapper::read(uint16_t address)
 {
-	printf("0x%4f", rom->prg_rom[0]);
 	return rom->prg_rom[address & ((0x4000 * prg_banks) - 1)];
 }
 
