@@ -9,9 +9,11 @@
 #include "Cartridge.h"
 
 #define DEBUG 1
-#define DEBUG_LOG 1
+//#define DEBUG_LOG 1
 
 void __cdecl odprintf(const char *format, ...);
+void printAddress(uint16_t pc, uint8_t opcode, uint16_t address, const char *mode);
+void printOpcode(const char* opcode, uint16_t address, uint8_t a, uint8_t x, uint8_t y, uint8_t p, uint8_t sp, uint16_t cycleCount);
 
 class CPU
 {
@@ -24,6 +26,8 @@ public:
 	uint32_t cycleCount;
 	/* Interrupt */
 	Interrupts interrupt;
+
+	static const char *opcode_names[0x100];
 
 	CPU(PPU *ppu, Controller *controller, Cartridge *cartridge);
 	~CPU();

@@ -34,6 +34,8 @@ PPU *ppu;
 Controller *controller;
 Cartridge *cartridge;
 
+long long int count = 0;
+
 PWSTR romPath;
 static volatile BOOL running = false;
 BOOL paused = false;
@@ -287,7 +289,7 @@ BOOL Run() {
 	}
 	if (romPath == NULL) {
 		romPath = LoadFile();
-		romPath = L"C:\\Users\\alperst\\Documents\\Visual Studio 2013\\Projects\\Win32NES\\01-abs_x_wrap.nes";
+		romPath = L"C:\\Users\\alperst\\Documents\\Visual Studio 2013\\Projects\\Win32NES\\rom_singles\\02-implied.nes";
 	}
 	cartridge->loadRom(romPath);
 	cpu->reset();
@@ -388,20 +390,24 @@ DWORD WINAPI emulationThread(LPVOID lpParameter) {
 	QueryPerformanceFrequency(&Frequency);
 	int previousCycleCount;
 	QueryPerformanceCounter(&TestTime);
+	QueryPerformanceCounter(&StartingTime);
 	while (running) {
 		if (cpu->cycleCount > 113) {
-			QueryPerformanceCounter(&EndingTime);
-			odprintfs("\n%1.6f mHz \n", ((float)(1000000000 / (((((EndingTime.QuadPart - TestTime.QuadPart) / cpu->cycleCount) * 1000000000) / (Frequency.QuadPart * 1000))))) / 1000000.0f);
-			ppu->Step();
+			//QueryPerformanceCounter(&EndingTime);
+			//odprintfs("\n%1.6f mHz \n", ((float)(1000000000 / (((((EndingTime.QuadPart - TestTime.QuadPart) / cpu->cycleCount) * 1000000000) / (Frequency.QuadPart * 1000))))) / 1000000.0f);
+			//QueryPerformanceCounter(&TestTime);
+			//ppu->Step();
 			cpu->cycleCount = 0;
-			QueryPerformanceCounter(&TestTime);
+			count++;
 		}
-		QueryPerformanceCounter(&StartingTime);
 		previousCycleCount = cpu->cycleCount;
 		cpu->execute();
 
 		//High-res sleep
-		while ((QueryPerformanceCounter(&EndingTime)) && (((EndingTime.QuadPart - StartingTime.QuadPart) * 1000000000) / (Frequency.QuadPart * 1000)) < ((1000000000 / HERTZ) * (cpu->cycleCount - previousCycleCount))) {}
+		//while ((QueryPerformanceCounter(&EndingTime)) && (((EndingTime.QuadPart - StartingTime.QuadPart) * 1000000000) / (Frequency.QuadPart * 1000)) < ((1000000000 / HERTZ) * (cpu->cycleCount - previousCycleCount))) {
+		//	Sleep(0);
+		//}
+		//QueryPerformanceCounter(&StartingTime);
 	}
 	return 0;
 }
