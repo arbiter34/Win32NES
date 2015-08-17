@@ -28,6 +28,7 @@
 #define SPRITE_ZERO_HIT 0x40
 
 class CPU;
+class Cartridge;
 
 class PPU
 {	
@@ -38,7 +39,7 @@ public:
 
 	color_t *screen;
 
-	void setCPU(CPU *cpu);
+	void setVar(Cartridge *cartridge, CPU *cpu);
 	void reset();
 
 
@@ -50,6 +51,8 @@ public:
 	void tick();
 	void Step();
 
+	uint8_t read(uint16_t address);
+	void write(uint16_t address, uint8_t word);
 	uint8_t readPalette(uint16_t address);
 	void writePalette(uint16_t address, uint8_t word);
 	uint8_t readRegister(uint16_t address);
@@ -69,6 +72,7 @@ public:
 private:
 
 #pragma region Vars
+	Cartridge *cartridge;
 	CPU *cpu;
 
 	uint8_t paletteData[32];

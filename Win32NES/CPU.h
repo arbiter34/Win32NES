@@ -8,7 +8,7 @@
 #include "Controller.h"
 #include "Cartridge.h"
 
-#define DEBUG 1
+//#define DEBUG 1
 //#define DEBUG_LOG 1
 
 void __cdecl odprintf(const char *format, ...);

@@ -13,7 +13,8 @@ PPU::~PPU()
 {
 }
 
-void PPU::setCPU(CPU *cpu) {
+void PPU::setVar(Cartridge *cartridge, CPU *cpu) {
+	this->cartridge = cartridge;
 	this->cpu = cpu;
 }
 
@@ -24,6 +25,38 @@ void PPU::reset() {
 	writeControl(0);
 	writeMask(0);
 	writeOAMAddress(0);
+}
+
+uint8_t PPU::read(uint16_t address) {
+	address = address & 0x3FFF;
+	if (address < 0x2000) {
+		return cartridge->read(address);
+	}
+	else if (address < 0x3F00) {
+		return nameTableData[address & 0x7FF];
+	}
+	else if (address < 0x4000) {
+		return readPalette(address & 0x1F);
+	}
+	else {
+		odprintf("FUCK");
+	}
+}
+
+void PPU::write(uint16_t address, uint8_t word) {
+	address = address & 0x3FFF;
+	if (address < 0x2000) {
+		cartridge->write(address, word);
+	}
+	else if (address < 0x3F00) {
+		nameTableData[address & 0x7FF] = word;
+	}
+	else if (address < 0x4000) {
+		writePalette(address & 0x1F, word);
+	}
+	else {
+		odprintf("FUCK");
+	}
 }
 
 
@@ -142,7 +175,7 @@ void PPU::writeAddress(uint8_t word) {
 }
 
 uint8_t PPU::readData() {
-	uint16_t word = cpu->read_memory(v);
+	uint16_t word = read(v);
 
 	// emulate buffered reads
 	if ((v % 0x4000) < 0x3F00) {
@@ -151,7 +184,7 @@ uint8_t PPU::readData() {
 		word = temp;
 	}
 	else {
-		PPUDATA = cpu->read_memory(v - 0x1000);
+		PPUDATA = read(v - 0x1000);
 	}
 
 	// increment address
@@ -165,7 +198,7 @@ uint8_t PPU::readData() {
 }
 
 void PPU::writeData(uint8_t word) {
-	cpu->store_memory(v, word);
+	write(v, word);
 	if ((PPUCTRL & INCREMENT) != 0) {
 		v++;
 	}
@@ -177,7 +210,7 @@ void PPU::writeData(uint8_t word) {
 void PPU::writeDMA(uint8_t word) {
 	uint16_t address = ((uint16_t)word) << 8;
 	for (int i = 0; i < 256; i++) {
-		oamData[OAMADDR] = cpu->read_memory(address);
+		oamData[OAMADDR] = read(address);
 		OAMADDR++;
 		address++;
 	}
@@ -263,14 +296,14 @@ void PPU::clearVerticalBlank() {
 void PPU::fetchNameTableByte() {
 	uint16_t temp_v = this->v;
 	uint16_t address = 0x2000 | (v & 0x0FFF);
-	nameTableByte = cpu->read_memory(address);
+	nameTableByte = read(address);
 }
 
 void PPU::fetchAttributeTableByte() {
 	uint16_t temp_v = this->v;
 	uint16_t address = 0x23C0 | (temp_v & 0x0C00) | ((temp_v >> 4) & 0x38) | ((temp_v >> 2) & 0x07);
 	uint16_t shift = ((temp_v >> 4) & 4) | (temp_v & 2);
-	attributeTableByte = ((cpu->read_memory(address) >> shift) & 3) << 2;
+	attributeTableByte = ((read(address) >> shift) & 3) << 2;
 }
 
 void PPU::fetchLowTileByte() {
@@ -278,7 +311,7 @@ void PPU::fetchLowTileByte() {
 	uint8_t table = PPUCTRL & BACKGROUND_TABLE;
 	uint8_t tile = nameTableByte;
 	uint16_t address = 0x1000 * ((uint16_t)table) + ((uint16_t)tile) * 16 + fineY;
-	lowTileByte = cpu->read_memory(address);
+	lowTileByte = read(address);
 }
 
 void PPU::fetchHighTileByte() {
@@ -286,7 +319,7 @@ void PPU::fetchHighTileByte() {
 	uint8_t table = PPUCTRL & BACKGROUND_TABLE;
 	uint8_t tile = nameTableByte;
 	uint16_t address = 0x1000 * ((uint16_t)table) + ((uint16_t)tile) * 16 + fineY;
-	highTileByte = cpu->read_memory(address + 8);
+	highTileByte = read(address + 8);
 }
 
 void PPU::storeTileData() {
@@ -399,8 +432,8 @@ uint32_t PPU::fetchSpritePattern(int col, int row) {
 		address = 0x1000 * ((uint16_t)table) + ((uint16_t)tile) * 16 + ((uint16_t)row);
 	}
 	uint8_t a = (attributes & 0x03) << 2;
-	lowTileByte = cpu->read_memory(address);
-	highTileByte = cpu->read_memory(address + 8);
+	lowTileByte = read(address);
+	highTileByte = read(address + 8);
 	uint32_t data = 0;
 	for (int i = 0; i < 8; i++) {
 		uint8_t p1, p2;

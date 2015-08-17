@@ -77,7 +77,7 @@ int APIENTRY _tWinMain(_In_ HINSTANCE hInstance,
 	controller = new Controller();
 	cartridge = new Cartridge();
 	cpu = new CPU(ppu, controller, cartridge);
-	ppu->setCPU(cpu);
+	ppu->setVar(cartridge, cpu);
 
 	MSG msg;
 	HACCEL hAccelTable;
@@ -289,7 +289,7 @@ BOOL Run() {
 	}
 	if (romPath == NULL) {
 		romPath = LoadFile();
-		romPath = L"C:\\Users\\alperst\\Documents\\Visual Studio 2013\\Projects\\Win32NES\\rom_singles\\02-implied.nes";
+		romPath = L"C:\\Users\\alperst\\Documents\\Visual Studio 2013\\Projects\\Win32NES\\rom_singles\\01-basics.nes";
 	}
 	cartridge->loadRom(romPath);
 	cpu->reset();
@@ -392,22 +392,20 @@ DWORD WINAPI emulationThread(LPVOID lpParameter) {
 	QueryPerformanceCounter(&TestTime);
 	QueryPerformanceCounter(&StartingTime);
 	while (running) {
-		if (cpu->cycleCount > 113) {
-			//QueryPerformanceCounter(&EndingTime);
-			//odprintfs("\n%1.6f mHz \n", ((float)(1000000000 / (((((EndingTime.QuadPart - TestTime.QuadPart) / cpu->cycleCount) * 1000000000) / (Frequency.QuadPart * 1000))))) / 1000000.0f);
-			//QueryPerformanceCounter(&TestTime);
-			//ppu->Step();
-			cpu->cycleCount = 0;
-			count++;
-		}
+
 		previousCycleCount = cpu->cycleCount;
 		cpu->execute();
+
+		int ppuCycles = abs((int)cpu->cycleCount - (int)previousCycleCount) * 3;
+		for (int i = 0; i < ppuCycles; i++) {
+			ppu->Step();
+		}
 
 		//High-res sleep
 		//while ((QueryPerformanceCounter(&EndingTime)) && (((EndingTime.QuadPart - StartingTime.QuadPart) * 1000000000) / (Frequency.QuadPart * 1000)) < ((1000000000 / HERTZ) * (cpu->cycleCount - previousCycleCount))) {
 		//	Sleep(0);
 		//}
-		//QueryPerformanceCounter(&StartingTime);
+		QueryPerformanceCounter(&StartingTime);
 	}
 	return 0;
 }
