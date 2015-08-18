@@ -1,6 +1,5 @@
 #include "stdafx.h"
 #include "CPU.h"
-#include "Opcodes.h"
 
 CPU::CPU(PPU *ppu, Controller *controller, Cartridge *cartridge)
 {
@@ -43,7 +42,13 @@ void CPU::reset() {
 
 void CPU::execute()
 {
-	if (pc == 0xE2C6) {
+	if (pc == 0xE2F9) {		//BNE @wrong
+		pc = pc;
+	}
+	if (pc == 0xE2D4) {
+		pc = pc;
+	}
+	if (pc == 0xE2D7) {
 		pc = pc;
 	}
 	if (stall > 0) {
@@ -191,7 +196,7 @@ void CPU::cmp_bit_helper(uint8_t reg, uint8_t mem) {
 #pragma region Debug Print
 
 void printAddress(uint16_t pc, uint8_t opcode, uint16_t address, const char *mode, bool implied = false) {
-#ifdef DEBUG || DEBUG_LOG
+#if defined(DEBUG) || defined(DEBUG_LOG)
 	char buff[255];
 	if ((address & 0xFF00) != 0) {
 		sprintf(buff, "\r\n%-6.4X%-3.2X%-3.2X%-4.2X%-4s%s", pc, opcode, (address & 0xFF), ((address & 0xFF00) >> 8), CPU::opcode_names[opcode], mode);
@@ -218,7 +223,7 @@ void printAddress(uint16_t pc, uint8_t opcode, uint16_t address, const char *mod
 }
 
 void printOpcode(const char* opcode, uint16_t address, uint8_t a, uint8_t x, uint8_t y, uint8_t p, uint8_t sp, uint16_t cycleCount) {
-#ifdef DEBUG || DEBUG_LOG
+#if defined(DEBUG) || defined(DEBUG_LOG)
 	char buff[255];
 	sprintf(buff, "A:%-3.2XX:%-3.2XY:%-3.2XP:%-3.2XSP:%-2.2X", a, x, y, p, sp);
 #endif
@@ -478,7 +483,7 @@ void CPU::IndirectY(){
 void CPU::Relative() {
 	address = pc + 1;
 	char buff[100];
-	sprintf(buff, "$%-27.2X", read_memory(address) + pc + 2);
+	sprintf(buff, "$%-27.2X", relative_address(pc, read_memory(address)) + 2);
 	printAddress(pc, opcode, read_memory(address), buff, false);
 	printOpcode("", address, a, x, y, p, sp, cycleCount);
 	pc += 2;

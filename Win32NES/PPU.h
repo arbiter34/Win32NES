@@ -38,6 +38,8 @@ public:
 	~PPU();
 
 	color_t *screen;
+	color_t *front;
+	color_t *back;
 
 	void setVar(Cartridge *cartridge, CPU *cpu);
 	void reset();
@@ -78,8 +80,6 @@ private:
 	uint8_t paletteData[32];
 	uint8_t nameTableData[2048];
 	uint8_t oamData[256];
-	color_t front[SCREEN_WIDTH*SCREEN_HEIGHT];
-	color_t back[SCREEN_WIDTH*SCREEN_HEIGHT];
 
 	uint16_t v;		//current vram address
 	uint16_t t;		//temp vram address
@@ -91,7 +91,6 @@ private:
 
 	//NMI Flags
 	bool nmiOccurred;
-	bool nmiOutput;
 	bool nmiPrevious;
 	uint8_t nmiDelay;
 

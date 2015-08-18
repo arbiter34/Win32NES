@@ -8,8 +8,8 @@
 #include "Controller.h"
 #include "Cartridge.h"
 
-//#define DEBUG 1
-//#define DEBUG_LOG 1
+#define DEBUG
+#define DEBUG_LOG
 
 void __cdecl odprintf(const char *format, ...);
 void printAddress(uint16_t pc, uint8_t opcode, uint16_t address, const char *mode);

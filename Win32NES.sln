@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 2013
 VisualStudioVersion = 12.0.21005.1
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Win32NES", "Win32NES\Win32NES.vcxproj", "{63FD6153-E217-44DA-8907-547628A51A76}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Win32NES", "Win32NES\Win32NES.vcxproj", "{E28E240F-BF63-44A3-968B-C697B5B3F4B1}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -11,10 +11,10 @@ Global
 		Release|Win32 = Release|Win32
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{63FD6153-E217-44DA-8907-547628A51A76}.Debug|Win32.ActiveCfg = Debug|Win32
-		{63FD6153-E217-44DA-8907-547628A51A76}.Debug|Win32.Build.0 = Debug|Win32
-		{63FD6153-E217-44DA-8907-547628A51A76}.Release|Win32.ActiveCfg = Release|Win32
-		{63FD6153-E217-44DA-8907-547628A51A76}.Release|Win32.Build.0 = Release|Win32
+		{E28E240F-BF63-44A3-968B-C697B5B3F4B1}.Debug|Win32.ActiveCfg = Debug|Win32
+		{E28E240F-BF63-44A3-968B-C697B5B3F4B1}.Debug|Win32.Build.0 = Debug|Win32
+		{E28E240F-BF63-44A3-968B-C697B5B3F4B1}.Release|Win32.ActiveCfg = Release|Win32
+		{E28E240F-BF63-44A3-968B-C697B5B3F4B1}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

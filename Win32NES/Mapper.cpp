@@ -17,11 +17,21 @@ Mapper::~Mapper()
 
 uint8_t Mapper::read(uint16_t address)
 {
-	return rom->prg_rom[address & ((0x4000 * prg_banks) - 1)];
+	if (address < 0x2000) {
+		return rom->chr_rom[address];
+	}
+	else {
+		return rom->prg_rom[address & ((0x4000 * prg_banks) - 1)];
+	}
 }
 
 
 void Mapper::write(uint16_t address, uint8_t word)
 {
-	rom->prg_rom[address & (0x7FFF / prg_banks)] = word;
+	if (address < 0x2000) {
+		rom->chr_rom[address] = word;
+	}
+	else {
+		rom->prg_rom[address & (0x7FFF / prg_banks)] = word;
+	}
 }

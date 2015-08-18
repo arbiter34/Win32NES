@@ -5,6 +5,8 @@
 PPU::PPU()
 {
 	reset();
+	front = new color_t[SCREEN_WIDTH * SCREEN_HEIGHT];
+	back = new color_t[SCREEN_WIDTH * SCREEN_HEIGHT];
 	screen = front;
 }
 
@@ -61,14 +63,14 @@ void PPU::write(uint16_t address, uint8_t word) {
 
 
 uint8_t PPU::readPalette(uint16_t address) {
-	if (address >= 16 && address % 4 == 0) {
+	if (address >= 16 && (address % 4) == 0) {
 		address -= 16;
 	}
 	return paletteData[address];
 }
 
 void PPU::writePalette(uint16_t address, uint8_t word) {
-	if (address >= 16 && address % 4 == 0) {
+	if (address >= 16 && (address % 4) == 0) {
 		address -= 16;
 	}
 	paletteData[address] = word;
@@ -127,7 +129,9 @@ void PPU::writeMask(uint8_t word) {
 }
 
 uint8_t PPU::readStatus() {
-	uint8_t result = (PPUSTATUS & 0xE0) | (reg & 0x1F);
+	uint8_t result = (reg & 0x1F);
+	result |= (PPUSTATUS & SPRITE_OVERFLOW);
+	result |= (PPUSTATUS & SPRITE_ZERO_HIT);
 	if (nmiOccurred) {
 		result |= 1 << 7;
 	}
@@ -188,7 +192,7 @@ uint8_t PPU::readData() {
 	}
 
 	// increment address
-	if ((PPUCTRL & INCREMENT) != 0) {
+	if ((PPUCTRL & INCREMENT) == 0) {
 		v += 1;
 	}
 	else {
@@ -199,8 +203,8 @@ uint8_t PPU::readData() {
 
 void PPU::writeData(uint8_t word) {
 	write(v, word);
-	if ((PPUCTRL & INCREMENT) != 0) {
-		v++;
+	if ((PPUCTRL & INCREMENT) == 0) {
+		v += 1;
 	}
 	else {
 		v += 32;
@@ -231,7 +235,7 @@ void PPU::incrementX() {
 }
 
 void PPU::incrementY() {
-	if (v & 0x7000 != 0x7000) {
+	if ((v & 0x7000) != 0x7000) {
 		// increment fine Y
 		v += 0x1000;
 	}
@@ -268,7 +272,7 @@ void PPU::copyY() {
 }
 
 void PPU::nmiChange() {
-	bool nmi = nmiOutput && nmiOccurred;
+	bool nmi = ((PPUCTRL & NMI_OUTPUT) != 0) && nmiOccurred;
 	if (nmi && !nmiPrevious) {
 		 // TODO: this fixes some games but the delay shouldn't have to be so
 		 // long, so the timings are off somewhere
@@ -280,9 +284,13 @@ void PPU::nmiChange() {
 void PPU::setVerticalBlank() {
 	if (screen == front) {
 		screen = back;
+		back = front;
+		front = screen;
 	}
 	else {
 		screen = front;
+		front = back;
+		back = screen;
 	}
 	nmiOccurred = true;
 	nmiChange();
@@ -308,7 +316,7 @@ void PPU::fetchAttributeTableByte() {
 
 void PPU::fetchLowTileByte() {
 	uint16_t fineY = (v >> 12) & 7;
-	uint8_t table = PPUCTRL & BACKGROUND_TABLE;
+	uint8_t table = (PPUCTRL & BACKGROUND_TABLE) >> 3;
 	uint8_t tile = nameTableByte;
 	uint16_t address = 0x1000 * ((uint16_t)table) + ((uint16_t)tile) * 16 + fineY;
 	lowTileByte = read(address);
@@ -316,7 +324,7 @@ void PPU::fetchLowTileByte() {
 
 void PPU::fetchHighTileByte() {
 	uint16_t fineY = (v >> 12) & 7;
-	uint8_t table = PPUCTRL & BACKGROUND_TABLE;
+	uint8_t table = (PPUCTRL & BACKGROUND_TABLE) >> 3;
 	uint8_t tile = nameTableByte;
 	uint16_t address = 0x1000 * ((uint16_t)table) + ((uint16_t)tile) * 16 + fineY;
 	highTileByte = read(address + 8);
@@ -374,10 +382,10 @@ void PPU::renderPixel() {
 	uint16_t temp = spritePixel();
 	uint8_t i = (temp & 0xF0) >> 8;
 	uint8_t sprite = temp & 0x0F;
-	if (x < 8 && PPUMASK & SHOW_LEFT_BACKGROUND) {
+	if (x < 8 && (PPUMASK & SHOW_LEFT_BACKGROUND)) {
 		background = 0;
 	}
-	if (x < 8 && PPUMASK & SHOW_LEFT_SPRITES) {
+	if (x < 8 && (PPUMASK & SHOW_LEFT_SPRITES)) {
 		sprite = 0;
 	}
 	bool b = background % 4 != 0;
@@ -412,11 +420,11 @@ uint32_t PPU::fetchSpritePattern(int col, int row) {
 	uint8_t attributes = oamData[col * 4 + 2];
 	uint16_t address;
 	uint8_t table;
-	if (PPUCTRL & SPRITE_SIZE == 0) {
+	if ((PPUCTRL & SPRITE_SIZE) == 0) {
 		if (attributes & 0x80 != 0) {
 			row = 7 - row;
 		}
-		table = PPUCTRL & SPRITE_TABLE != 0;
+		table = (PPUCTRL & SPRITE_TABLE) != 0;
 		address = 0x1000 * ((uint16_t)table) + ((uint16_t)tile) * 16 + ((uint16_t)row);
 	}
 	else {
@@ -493,12 +501,12 @@ void PPU::evaluateSprites() {
 void PPU::tick() {
 	if (nmiDelay > 0) {
 		nmiDelay--;
-		if (nmiDelay == 0 && nmiOutput && nmiOccurred) {
+		if (nmiDelay == 0 && ((PPUCTRL & NMI_OUTPUT) != 0) && nmiOccurred) {
 			cpu->interrupt = _NMI;
 		}
 	}
 
-	if ((PPUMASK & SHOW_BACKGROUND != 0) || (PPUMASK & SHOW_SPRITES != 0)) {
+	if (((PPUMASK & SHOW_BACKGROUND) != 0) || ((PPUMASK & SHOW_SPRITES) != 0)) {
 		if (f == 1 && scanline == 261 && cycle == 339) {
 			cycle = 0;
 			scanline = 0;
@@ -522,7 +530,7 @@ void PPU::tick() {
 void PPU::Step() {
 	tick();
 
-	bool renderingEnabled = (PPUMASK & SHOW_BACKGROUND != 0) || (PPUMASK & SHOW_SPRITES != 0);
+	bool renderingEnabled = ((PPUMASK & SHOW_BACKGROUND) != 0) || ((PPUMASK & SHOW_SPRITES) != 0);
 	bool preLine = scanline == 261;
 	bool visibleLine = scanline < 240;
 	bool renderLine = preLine || visibleLine;
