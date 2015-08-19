@@ -29,13 +29,29 @@ void PPU::reset() {
 	writeOAMAddress(0);
 }
 
+uint16_t MirrorLookup[5][4] = {
+	{ 0, 0, 1, 1 },
+	{ 0, 1, 0, 1 },
+	{ 0, 0, 0, 0 },
+	{ 1, 1, 1, 1 },
+	{ 0, 1, 2, 3 }
+};
+
+uint16_t MirrorAddress(uint8_t mode, uint16_t address) {
+	address = (address - 0x2000) % 0x1000;
+	uint8_t table = address / 0x0400;
+	uint16_t offset = address % 0x0400;
+	return 0x2000 + MirrorLookup[mode][table] * 0x0400 + offset;
+}
+
 uint8_t PPU::read(uint16_t address) {
 	address = address & 0x3FFF;
 	if (address < 0x2000) {
 		return cartridge->read(address);
 	}
 	else if (address < 0x3F00) {
-		return nameTableData[address & 0x7FF];
+		uint8_t mode = cartridge->mirror;
+		return nameTableData[MirrorAddress(mode, address) & 0x7FF];
 	}
 	else if (address < 0x4000) {
 		return readPalette(address & 0x1F);
@@ -51,7 +67,8 @@ void PPU::write(uint16_t address, uint8_t word) {
 		cartridge->write(address, word);
 	}
 	else if (address < 0x3F00) {
-		nameTableData[address & 0x7FF] = word;
+		uint8_t mode = cartridge->mirror;
+		nameTableData[MirrorAddress(mode, address) & 0x7FF] = word;
 	}
 	else if (address < 0x4000) {
 		writePalette(address & 0x1F, word);
@@ -150,7 +167,8 @@ uint8_t PPU::readOAMData() {
 }
 
 void PPU::writeOAMData(uint8_t word) {
-	oamData[OAMADDR++] = word;
+	oamData[OAMADDR] = word;
+	OAMADDR++;
 }
 
 void PPU::writeScroll(uint8_t word) {
@@ -168,11 +186,11 @@ void PPU::writeScroll(uint8_t word) {
 
 void PPU::writeAddress(uint8_t word) {
 	if (w == 0) {
-		t = (t & 0x80FF) | ((((uint16_t)word) & 0x3F) << 8);
+		t = (t & 0x00FF) | ((((uint16_t)word) & 0x3F) << 8);
 		w = 1;
 	}
 	else {
-		t = (t & 0xFF00) | ((uint16_t)word);
+		t = (t & 0x7F00) | ((uint16_t)word);
 		v = t;
 		w = 0;
 	}
@@ -182,7 +200,7 @@ uint8_t PPU::readData() {
 	uint16_t word = read(v);
 
 	// emulate buffered reads
-	if ((v % 0x4000) < 0x3F00) {
+	if ((v & 0x3FFF) < 0x3F00) {
 		uint8_t temp = PPUDATA;
 		PPUDATA = word;
 		word = temp;
@@ -214,7 +232,7 @@ void PPU::writeData(uint8_t word) {
 void PPU::writeDMA(uint8_t word) {
 	uint16_t address = ((uint16_t)word) << 8;
 	for (int i = 0; i < 256; i++) {
-		oamData[OAMADDR] = read(address);
+		oamData[OAMADDR] = cpu->read_memory(address);
 		OAMADDR++;
 		address++;
 	}
@@ -225,7 +243,7 @@ void PPU::writeDMA(uint8_t word) {
 }
 
 void PPU::incrementX() {
-	if ((v & 0x001F) == 31) {
+	if ((v & 0x001F) == 0x1F) {
 		v &= 0xFFE0;
 		v ^= 0x0400;
 	}
@@ -282,16 +300,9 @@ void PPU::nmiChange() {
 }
 
 void PPU::setVerticalBlank() {
-	if (screen == front) {
-		screen = back;
-		back = front;
-		front = screen;
-	}
-	else {
-		screen = front;
-		front = back;
-		back = screen;
-	}
+	screen = back;
+	back = front;
+	front = screen;
 	nmiOccurred = true;
 	nmiChange();
 }
@@ -303,7 +314,7 @@ void PPU::clearVerticalBlank() {
 
 void PPU::fetchNameTableByte() {
 	uint16_t temp_v = this->v;
-	uint16_t address = 0x2000 | (v & 0x0FFF);
+	uint16_t address = 0x2000 | (temp_v & 0x0FFF);
 	nameTableByte = read(address);
 }
 
@@ -316,7 +327,7 @@ void PPU::fetchAttributeTableByte() {
 
 void PPU::fetchLowTileByte() {
 	uint16_t fineY = (v >> 12) & 7;
-	uint8_t table = (PPUCTRL & BACKGROUND_TABLE) >> 3;
+	uint8_t table = (PPUCTRL & BACKGROUND_TABLE) >> 4;
 	uint8_t tile = nameTableByte;
 	uint16_t address = 0x1000 * ((uint16_t)table) + ((uint16_t)tile) * 16 + fineY;
 	lowTileByte = read(address);
@@ -324,7 +335,7 @@ void PPU::fetchLowTileByte() {
 
 void PPU::fetchHighTileByte() {
 	uint16_t fineY = (v >> 12) & 7;
-	uint8_t table = (PPUCTRL & BACKGROUND_TABLE) >> 3;
+	uint8_t table = (PPUCTRL & BACKGROUND_TABLE) >> 4;
 	uint8_t tile = nameTableByte;
 	uint16_t address = 0x1000 * ((uint16_t)table) + ((uint16_t)tile) * 16 + fineY;
 	highTileByte = read(address + 8);
@@ -366,7 +377,7 @@ uint16_t PPU::spritePixel() {
 			continue;
 		}
 		offset = 7 - offset;
-		uint8_t color = (uint8_t)(spritePatterns[i] >> ((uint8_t)offset * 4) & 0x0F);
+		uint8_t color = (uint8_t)((spritePatterns[i] >> ((uint8_t)offset * 4)) & 0x0F);
 		if (color % 4 == 0) {
 			continue;
 		}
@@ -380,16 +391,16 @@ void PPU::renderPixel() {
 	uint32_t y = scanline;
 	uint8_t background = backgroundPixel();
 	uint16_t temp = spritePixel();
-	uint8_t i = (temp & 0xF0) >> 8;
-	uint8_t sprite = temp & 0x0F;
-	if (x < 8 && (PPUMASK & SHOW_LEFT_BACKGROUND)) {
+	uint8_t i = (temp & 0xFF00) >> 8;
+	uint8_t sprite = temp & 0x00FF;
+	if (x < 8 && ((PPUMASK & SHOW_LEFT_BACKGROUND) == 0)) {
 		background = 0;
 	}
-	if (x < 8 && (PPUMASK & SHOW_LEFT_SPRITES)) {
+	if (x < 8 && ((PPUMASK & SHOW_LEFT_SPRITES) == 0)) {
 		sprite = 0;
 	}
-	bool b = background % 4 != 0;
-	bool s = sprite % 4 != 0;
+	bool b = (background % 4) != 0;
+	bool s = (sprite % 4) != 0;
 	uint8_t color;
 	if (!b && !s) {
 		color = 0;
@@ -421,14 +432,14 @@ uint32_t PPU::fetchSpritePattern(int col, int row) {
 	uint16_t address;
 	uint8_t table;
 	if ((PPUCTRL & SPRITE_SIZE) == 0) {
-		if (attributes & 0x80 != 0) {
+		if (attributes & 0x80 == 0x80) {
 			row = 7 - row;
 		}
-		table = (PPUCTRL & SPRITE_TABLE) != 0;
+		table = (PPUCTRL & SPRITE_TABLE) >> 3;
 		address = 0x1000 * ((uint16_t)table) + ((uint16_t)tile) * 16 + ((uint16_t)row);
 	}
 	else {
-		if (attributes & 0x80 != 0) {
+		if (attributes & 0x80 == 0x80) {
 			row = 15 - row;
 		}
 		table = tile & 0x01;
@@ -566,7 +577,7 @@ void PPU::Step() {
 			copyY();
 		}
 		if (renderLine) {
-			if (fetchCycle && (cycle % 8 == 0)) {
+			if (fetchCycle && ((cycle % 8) == 0)) {
 				incrementX();
 			}
 			if (cycle == 256) {

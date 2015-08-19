@@ -38,6 +38,8 @@ public:
 
 	iNesRom *rom;
 
+	uint8_t mirror;
+
 	bool loadRom(PWSTR filePath);
 
 	uint8_t read(uint16_t address);

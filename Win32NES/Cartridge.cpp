@@ -34,6 +34,10 @@ bool Cartridge::loadRom(PWSTR filePath) {
 		return false;
 	}
 
+	uint8_t mirror1 = rom->header.flags6 & 1;
+	uint8_t mirror2 = (rom->header.flags7 >> 3) & 1;
+	mirror = mirror1 | (mirror2 << 1);
+
 	int prg_rom_size = rom->header.prg_rom_pages * PRG_ROM_PAGE_SIZE;
 	rom->prg_rom = new uint8_t[prg_rom_size];
 	printf("0x%04\n", rom->prg_rom[0]);

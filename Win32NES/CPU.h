@@ -8,8 +8,8 @@
 #include "Controller.h"
 #include "Cartridge.h"
 
-#define DEBUG
-#define DEBUG_LOG
+//#define DEBUG
+//#define DEBUG_LOG
 
 void __cdecl odprintf(const char *format, ...);
 void printAddress(uint16_t pc, uint8_t opcode, uint16_t address, const char *mode);
@@ -34,7 +34,7 @@ public:
 
 #pragma region CPU Ops
 
-	void execute();
+	uint8_t execute();
 	short fetch();
 	void reset();
 
@@ -67,6 +67,7 @@ private:
 	addressingModePointer addressingModeTable[0x100];
 	static const uint8_t instructionCycles[0x100];
 	static const uint8_t instructionPageCycles[0x100];
+	static const uint8_t instructionSizes[0x100];
 
 	/*Registers*/
 	uint16_t pc;     // program counter, 16 bits
@@ -226,6 +227,28 @@ private:
 	 void TXA();
 	 void TXS();
 	 void TYA();
+
+#pragma endregion
+
+#pragma region Unofficial Opcodes 
+	 
+	 /* Unoffical Opcodes */
+
+	 void ALR();
+	 void ANC();
+	 void ARR();
+	 void AXS();
+	 void LAX();
+	 void SAX();
+	 void DCP();
+	 void ISC();
+	 void RLA();
+	 void RRA();
+	 void SLO();
+	 void SRE();
+	 void SKB();
+	 void IGN();
+
 
 #pragma endregion
 

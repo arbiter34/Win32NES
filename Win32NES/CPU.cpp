@@ -40,20 +40,12 @@ void CPU::reset() {
 	y = 0;
 }
 
-void CPU::execute()
+uint8_t CPU::execute()
 {
-	if (pc == 0xE2F9) {		//BNE @wrong
-		pc = pc;
-	}
-	if (pc == 0xE2D4) {
-		pc = pc;
-	}
-	if (pc == 0xE2D7) {
-		pc = pc;
-	}
+	uint8_t previousCycleCount = cycleCount;
 	if (stall > 0) {
 		stall--;
-		return;
+		return 1;
 	}
 
 	if (interrupt == _NMI) {
@@ -67,8 +59,13 @@ void CPU::execute()
 	//Fetch
 	opcode = fetch();
 
+	if (pc == 0x03A0 && opcode == 0x1A) {
+		pc = pc;
+	}
+
 	//Addressing Mode Decode
 	(this->*addressingModeTable[(opcode)])();
+	pc += instructionSizes[opcode];
 
 	//Instruction Decode
 	(this->*cpuTable[(opcode)])();
@@ -76,6 +73,7 @@ void CPU::execute()
 	if (pageCrossed) {
 		cycleCount += instructionPageCycles[opcode];
 	}
+	return cycleCount - previousCycleCount;
 }
 
 
@@ -275,7 +273,7 @@ uint8_t CPU::read_memory(uint16_t address){
 	}
 	/* PPU Ctrl Registers - Mirrored 1023 Times*/
 	else if (address >= 0x2000 && address < 0x4000) {
-		ppu->readRegister(0x2000 + (address & 0x07));
+		word = ppu->readRegister(0x2000 + (address & 0x07));
 	}
 	/* Registers (Mostly APU) */
 	else if (address >= 0x4000 && address < 0x4020) {
@@ -302,7 +300,7 @@ uint8_t CPU::read_memory(uint16_t address){
 	}
 	/* PRG-ROM */
 	else if (address >= 0x8000 && address < 0xFFFF) {
-		word = cartridge->read(address - 0x8000);
+		word = cartridge->read(address);
 	}
 	return word;
 }
@@ -403,7 +401,6 @@ void CPU::Absolute(){
 	sprintf(buff, "$%-27.4X", address);
 	printAddress(pc, opcode, address, buff, false);
 	printOpcode("", address, a, x, y, p, sp, cycleCount);
-	pc += 3;
 }
 void CPU::AbsoluteX(){
 	uint16_t temp_address = read_address(pc + 1);
@@ -413,7 +410,6 @@ void CPU::AbsoluteX(){
 	printAddress(pc, opcode, temp_address, buff, false);
 	printOpcode("", address, a, x, y, p, sp, cycleCount);
 	pageCrossed = pageDiff(address - (uint16_t)x, address);
-	pc += 3;
 }
 void CPU::AbsoluteY(){
 	uint16_t temp_address = read_address(pc + 1);
@@ -423,7 +419,6 @@ void CPU::AbsoluteY(){
 	printAddress(pc, opcode, temp_address, buff, false);
 	printOpcode("", address, a, x, y, p, sp, cycleCount);
 	pageCrossed = pageDiff(address - (uint16_t)y, address);
-	pc += 3;
 }
 void CPU::Accumulator(){
 	address = 0;
@@ -432,7 +427,6 @@ void CPU::Accumulator(){
 	sprintf(buff, "A%27s", "");
 	printAddress(pc, opcode, 0, buff, true);
 	printOpcode("", address, a, x, y, p, sp, cycleCount);
-	pc += 1;
 }
 void CPU::Immediate(){
 	address = pc + 1;
@@ -440,14 +434,12 @@ void CPU::Immediate(){
 	sprintf(buff, "#$%-26.2X", read_memory(address));
 	printAddress(pc, opcode, read_memory(address), buff, false);
 	printOpcode("", address, a, x, y, p, sp, cycleCount);
-	pc += 2;
 }
 void CPU::Implicit() {
 	char buff[100];
 	sprintf(buff, "%28s", "");
 	printAddress(pc, opcode, 0, buff, true);
 	printOpcode("", address, a, x, y, p, sp, cycleCount);
-	pc += opcode == 0x00 ? 2 : 1;
 }
 void CPU::Indirect(){
 	uint16_t jmp_address = read_address(pc + 1);
@@ -461,7 +453,6 @@ void CPU::Indirect(){
 	sprintf(buff, "($%-4.4X)%21s", jmp_address, "");
 	printAddress(pc, opcode, jmp_address, buff, false);
 	printOpcode("", address, a, x, y, p, sp, cycleCount);
-	pc += 3;
 }
 void CPU::IndirectX(){
 	address = read_address_bug((read_memory(pc + 1) + x) & 0xFF);
@@ -469,7 +460,6 @@ void CPU::IndirectX(){
 	sprintf(buff, "($%-2.2X,X)%21s", read_memory(pc + 1), "");
 	printAddress(pc, opcode, read_memory(pc + 1), buff, false);
 	printOpcode("", address, a, x, y, p, sp, cycleCount);
-	pc += 2;
 }
 void CPU::IndirectY(){
 	address = read_address_bug(read_memory(pc + 1)) + y;
@@ -478,7 +468,6 @@ void CPU::IndirectY(){
 	sprintf(buff, "($%-2.2X),Y%21s", read_memory(pc + 1), "");
 	printAddress(pc, opcode, read_memory(pc + 1), buff, false);
 	printOpcode("", address, a, x, y, p, sp, cycleCount);
-	pc += 2;
 }
 void CPU::Relative() {
 	address = pc + 1;
@@ -486,7 +475,6 @@ void CPU::Relative() {
 	sprintf(buff, "$%-27.2X", relative_address(pc, read_memory(address)) + 2);
 	printAddress(pc, opcode, read_memory(address), buff, false);
 	printOpcode("", address, a, x, y, p, sp, cycleCount);
-	pc += 2;
 }
 void CPU::ZeroPage(){
 	address = read_memory(pc + 1);
@@ -494,7 +482,6 @@ void CPU::ZeroPage(){
 	sprintf(buff, "$%-27.2X", address);
 	printAddress(pc, opcode, address, buff, false);
 	printOpcode("", address, a, x, y, p, sp, cycleCount);
-	pc += 2;
 }
 void CPU::ZeroPageX(){
 	uint16_t temp_address = read_memory(pc + 1);
@@ -503,7 +490,6 @@ void CPU::ZeroPageX(){
 	sprintf(buff, "$%-2.2X,X%23s", temp_address, "");
 	printAddress(pc, opcode, temp_address, buff, false);
 	printOpcode("", address, a, x, y, p, sp, cycleCount);
-	pc += 2;
 }
 void CPU::ZeroPageY(){
 	uint16_t temp_address = read_memory(pc + 1);
@@ -512,7 +498,6 @@ void CPU::ZeroPageY(){
 	sprintf(buff, "$%-2.2X,Y%23s", temp_address, "");
 	printAddress(pc, opcode, temp_address, buff, false);
 	printOpcode("", address, a, x, y, p, sp, cycleCount);
-	pc += 2;
 }
 
 #pragma endregion
@@ -531,6 +516,8 @@ void CPU::ADC() {
 
 	a = (uint8_t)temp;
 }
+
+
 void CPU::AND() {
 	src = read_memory(address);
 	a &= src;
@@ -864,6 +851,70 @@ void CPU::TYA() {
 
 #pragma endregion
 
+#pragma region Unofficial Opcodes 
+
+/* Unoffical Opcodes */
+
+void CPU::ALR() {
+
+}
+
+void CPU::ANC() {
+
+}
+
+void CPU::ARR() {
+
+}
+
+void CPU::AXS() {
+
+}
+
+void CPU::LAX() {
+
+}
+
+void CPU::SAX() {
+
+}
+
+void CPU::DCP() {
+
+}
+
+void CPU::ISC() {
+
+}
+
+void CPU::RLA() {
+
+}
+
+void CPU::RRA() {
+
+}
+
+void CPU::SLO() {
+
+}
+
+void CPU::SRE() {
+
+}
+
+void CPU::SKB() {
+
+}
+
+void CPU::IGN() {
+
+}
+
+
+
+#pragma endregion
+
 #pragma region initAdressingModeTable()
 
 void CPU::initAddressingModeTable() {
@@ -893,7 +944,7 @@ void CPU::initAddressingModeTable() {
 	this->addressingModeTable[23] = &CPU::cpuNULL;
 	this->addressingModeTable[24] = &CPU::Implicit;
 	this->addressingModeTable[25] = &CPU::AbsoluteY;
-	this->addressingModeTable[26] = &CPU::cpuNULL;
+	this->addressingModeTable[26] = &CPU::Implicit;
 	this->addressingModeTable[27] = &CPU::cpuNULL;
 	this->addressingModeTable[28] = &CPU::cpuNULL;
 	this->addressingModeTable[29] = &CPU::AbsoluteX;
@@ -925,7 +976,7 @@ void CPU::initAddressingModeTable() {
 	this->addressingModeTable[55] = &CPU::cpuNULL;
 	this->addressingModeTable[56] = &CPU::Implicit;
 	this->addressingModeTable[57] = &CPU::AbsoluteY;
-	this->addressingModeTable[58] = &CPU::cpuNULL;
+	this->addressingModeTable[58] = &CPU::Implicit;
 	this->addressingModeTable[59] = &CPU::cpuNULL;
 	this->addressingModeTable[60] = &CPU::cpuNULL;
 	this->addressingModeTable[61] = &CPU::AbsoluteX;
@@ -957,7 +1008,7 @@ void CPU::initAddressingModeTable() {
 	this->addressingModeTable[87] = &CPU::cpuNULL;
 	this->addressingModeTable[88] = &CPU::Implicit;
 	this->addressingModeTable[89] = &CPU::AbsoluteY;
-	this->addressingModeTable[90] = &CPU::cpuNULL;
+	this->addressingModeTable[90] = &CPU::Implicit;
 	this->addressingModeTable[91] = &CPU::cpuNULL;
 	this->addressingModeTable[92] = &CPU::cpuNULL;
 	this->addressingModeTable[93] = &CPU::AbsoluteX;
@@ -989,7 +1040,7 @@ void CPU::initAddressingModeTable() {
 	this->addressingModeTable[119] = &CPU::cpuNULL;
 	this->addressingModeTable[120] = &CPU::Implicit;
 	this->addressingModeTable[121] = &CPU::AbsoluteY;
-	this->addressingModeTable[122] = &CPU::cpuNULL;
+	this->addressingModeTable[122] = &CPU::Implicit;
 	this->addressingModeTable[123] = &CPU::cpuNULL;
 	this->addressingModeTable[124] = &CPU::cpuNULL;
 	this->addressingModeTable[125] = &CPU::AbsoluteX;
@@ -1085,7 +1136,7 @@ void CPU::initAddressingModeTable() {
 	this->addressingModeTable[215] = &CPU::cpuNULL;
 	this->addressingModeTable[216] = &CPU::Implicit;
 	this->addressingModeTable[217] = &CPU::AbsoluteY;
-	this->addressingModeTable[218] = &CPU::cpuNULL;
+	this->addressingModeTable[218] = &CPU::Implicit;
 	this->addressingModeTable[219] = &CPU::cpuNULL;
 	this->addressingModeTable[220] = &CPU::cpuNULL;
 	this->addressingModeTable[221] = &CPU::AbsoluteX;
@@ -1117,7 +1168,7 @@ void CPU::initAddressingModeTable() {
 	this->addressingModeTable[247] = &CPU::cpuNULL;
 	this->addressingModeTable[248] = &CPU::Implicit;
 	this->addressingModeTable[249] = &CPU::AbsoluteY;
-	this->addressingModeTable[250] = &CPU::cpuNULL;
+	this->addressingModeTable[250] = &CPU::Implicit;
 	this->addressingModeTable[251] = &CPU::cpuNULL;
 	this->addressingModeTable[252] = &CPU::cpuNULL;
 	this->addressingModeTable[253] = &CPU::AbsoluteX;
@@ -1157,7 +1208,7 @@ void CPU::initCPUTable() {
 	this->cpuTable[23] = &CPU::cpuNULL;
 	this->cpuTable[24] = &CPU::CLC;
 	this->cpuTable[25] = &CPU::ORA;
-	this->cpuTable[26] = &CPU::cpuNULL;
+	this->cpuTable[26] = &CPU::NOP;
 	this->cpuTable[27] = &CPU::cpuNULL;
 	this->cpuTable[28] = &CPU::cpuNULL;
 	this->cpuTable[29] = &CPU::ORA;
@@ -1189,7 +1240,7 @@ void CPU::initCPUTable() {
 	this->cpuTable[55] = &CPU::cpuNULL;
 	this->cpuTable[56] = &CPU::SEC;
 	this->cpuTable[57] = &CPU::AND;
-	this->cpuTable[58] = &CPU::cpuNULL;
+	this->cpuTable[58] = &CPU::NOP;
 	this->cpuTable[59] = &CPU::cpuNULL;
 	this->cpuTable[60] = &CPU::cpuNULL;
 	this->cpuTable[61] = &CPU::AND;
@@ -1221,7 +1272,7 @@ void CPU::initCPUTable() {
 	this->cpuTable[87] = &CPU::cpuNULL;
 	this->cpuTable[88] = &CPU::CLI;
 	this->cpuTable[89] = &CPU::EOR;
-	this->cpuTable[90] = &CPU::cpuNULL;
+	this->cpuTable[90] = &CPU::NOP;
 	this->cpuTable[91] = &CPU::cpuNULL;
 	this->cpuTable[92] = &CPU::cpuNULL;
 	this->cpuTable[93] = &CPU::EOR;
@@ -1253,7 +1304,7 @@ void CPU::initCPUTable() {
 	this->cpuTable[119] = &CPU::cpuNULL;
 	this->cpuTable[120] = &CPU::SEI;
 	this->cpuTable[121] = &CPU::ADC;
-	this->cpuTable[122] = &CPU::cpuNULL;
+	this->cpuTable[122] = &CPU::NOP;
 	this->cpuTable[123] = &CPU::cpuNULL;
 	this->cpuTable[124] = &CPU::cpuNULL;
 	this->cpuTable[125] = &CPU::ADC;
@@ -1349,7 +1400,7 @@ void CPU::initCPUTable() {
 	this->cpuTable[215] = &CPU::cpuNULL;
 	this->cpuTable[216] = &CPU::CLD;
 	this->cpuTable[217] = &CPU::CMP;
-	this->cpuTable[218] = &CPU::cpuNULL;
+	this->cpuTable[218] = &CPU::NOP;
 	this->cpuTable[219] = &CPU::cpuNULL;
 	this->cpuTable[220] = &CPU::cpuNULL;
 	this->cpuTable[221] = &CPU::CMP;
@@ -1381,7 +1432,7 @@ void CPU::initCPUTable() {
 	this->cpuTable[247] = &CPU::cpuNULL;
 	this->cpuTable[248] = &CPU::SED;
 	this->cpuTable[249] = &CPU::SBC;
-	this->cpuTable[250] = &CPU::cpuNULL;
+	this->cpuTable[250] = &CPU::NOP;
 	this->cpuTable[251] = &CPU::cpuNULL;
 	this->cpuTable[252] = &CPU::cpuNULL;
 	this->cpuTable[253] = &CPU::SBC;
@@ -1464,6 +1515,25 @@ const char* CPU::opcode_names[0x100] = {
 	"INX", "SBC", "NOP", "SBC", "CPX", "SBC", "INC", "ISC",
 	"BEQ", "SBC", "KIL", "ISC", "NOP", "SBC", "INC", "ISC",
 	"SED", "SBC", "NOP", "ISC", "NOP", "SBC", "INC", "ISC",
+};
+
+const uint8_t CPU::instructionSizes[0x100] = {
+	1, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0,
+	2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
+	3, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0,
+	2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
+	1, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0,
+	2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
+	1, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0,
+	2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
+	2, 2, 0, 0, 2, 2, 2, 0, 1, 0, 1, 0, 3, 3, 3, 0,
+	2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 0, 3, 0, 0,
+	2, 2, 2, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0,
+	2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
+	2, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0,
+	2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
+	2, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0,
+	2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
 };
 
 #pragma endregion

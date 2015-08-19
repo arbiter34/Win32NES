@@ -202,6 +202,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
 				break;
 			case IDM_OPEN:
+				Stop(hWnd);
 				romPath = LoadFile();
 				break;
 			case IDM_EXIT:
@@ -370,15 +371,10 @@ void __cdecl odprintfs(const char *format, ...)
 DWORD WINAPI emulationThread(LPVOID lpParameter) {
 	LARGE_INTEGER StartingTime, EndingTime, ElapsedMicroseconds, Frequency, TestTime;
 	QueryPerformanceFrequency(&Frequency);
-	int previousCycleCount;
 	QueryPerformanceCounter(&TestTime);
 	QueryPerformanceCounter(&StartingTime);
 	while (running) {
-
-		previousCycleCount = cpu->cycleCount;
-		cpu->execute();
-
-		int ppuCycles = abs((int)cpu->cycleCount - (int)previousCycleCount) * 3;
+		int ppuCycles = cpu->execute() * 3;
 		for (int i = 0; i < ppuCycles; i++) {
 			ppu->Step();
 		}
@@ -420,9 +416,9 @@ void DrawScreen(HDC hdc)
 
 	for (int i = 0; i < SCREEN_HEIGHT; i++) {
 		for (int j = 0; j < SCREEN_WIDTH; j++) {
-			int r = ppu->screen[i * SCREEN_HEIGHT + j].r;
-			int g = ppu->screen[i * SCREEN_HEIGHT + j].g;
-			int b = ppu->screen[i * SCREEN_HEIGHT + j].b;
+			int r = ppu->screen[i * SCREEN_WIDTH + j].r;
+			int g = ppu->screen[i * SCREEN_WIDTH + j].g;
+			int b = ppu->screen[i * SCREEN_WIDTH + j].b;
 			HBRUSH brush = CreateSolidBrush(RGB(r, g, b));
 			rect.left = border + j * widthFactor;
 			rect.top = border + i * heightFactor;

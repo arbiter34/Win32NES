@@ -5,7 +5,7 @@
 #include "CPU.h"
 
 //PPUCTRL Bitmasks
-#define NAME_TABLE 0x1
+#define NAME_TABLE 0x3
 #define INCREMENT 0x4
 #define SPRITE_TABLE 0x8
 #define BACKGROUND_TABLE 0x10
@@ -26,6 +26,7 @@
 //PPUSTATUS Bitmasks
 #define SPRITE_OVERFLOW 0x20
 #define SPRITE_ZERO_HIT 0x40
+#define VERTICAL_BLANK 0x80
 
 class CPU;
 class Cartridge;
@@ -38,8 +39,6 @@ public:
 	~PPU();
 
 	color_t *screen;
-	color_t *front;
-	color_t *back;
 
 	void setVar(Cartridge *cartridge, CPU *cpu);
 	void reset();
@@ -76,6 +75,9 @@ private:
 #pragma region Vars
 	Cartridge *cartridge;
 	CPU *cpu;
+
+	color_t *front;
+	color_t *back;
 
 	uint8_t paletteData[32];
 	uint8_t nameTableData[2048];
