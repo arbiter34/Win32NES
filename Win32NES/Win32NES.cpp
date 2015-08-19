@@ -96,8 +96,19 @@ int APIENTRY _tWinMain(_In_ HINSTANCE hInstance,
 	{
 		if (!TranslateAccelerator(msg.hwnd, hAccelTable, &msg))
 		{
-			TranslateMessage(&msg);
-			DispatchMessage(&msg);
+			if (msg.message == WM_KEYDOWN) {
+				controller->key_down(msg.wParam);
+			}
+			else if (msg.message == WM_KEYUP) {
+				controller->key_up(msg.wParam);
+			}
+			else if (msg.message == WM_QUIT) {
+				break;
+			}
+			else {
+				TranslateMessage(&msg);
+				DispatchMessage(&msg);
+			}
 		}
 	}
 
