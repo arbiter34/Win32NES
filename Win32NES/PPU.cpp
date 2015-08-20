@@ -27,6 +27,7 @@ void PPU::reset() {
 	writeControl(0);
 	writeMask(0);
 	writeOAMAddress(0);
+	spriteCount = 0;
 }
 
 uint16_t MirrorLookup[5][4] = {
@@ -163,6 +164,9 @@ void PPU::writeOAMAddress(uint8_t word) {
 }
 
 uint8_t PPU::readOAMData() {
+	if (cycle > 0 && cycle <= 64) {
+		return 0xFF;
+	}
 	return oamData[OAMADDR];
 }
 
@@ -186,11 +190,11 @@ void PPU::writeScroll(uint8_t word) {
 
 void PPU::writeAddress(uint8_t word) {
 	if (w == 0) {
-		t = (t & 0x00FF) | ((((uint16_t)word) & 0x3F) << 8);
+		t = (t & 0x80FF) | ((((uint16_t)word) & 0x3F) << 8);
 		w = 1;
 	}
 	else {
-		t = (t & 0x7F00) | ((uint16_t)word);
+		t = (t & 0xFF00) | ((uint16_t)word);
 		v = t;
 		w = 0;
 	}
@@ -294,7 +298,7 @@ void PPU::nmiChange() {
 	if (nmi && !nmiPrevious) {
 		 // TODO: this fixes some games but the delay shouldn't have to be so
 		 // long, so the timings are off somewhere
-		nmiDelay = 15;
+		nmiDelay = 1;
 	}
 	nmiPrevious = nmi;
 }
@@ -372,12 +376,12 @@ uint16_t PPU::spritePixel() {
 		return (uint16_t)0;
 	}
 	for (int i = 0; i < spriteCount; i++) {
-		uint32_t offset = (cycle - 1) - (uint32_t)spritePositions[i];
+		uint32_t offset = (cycle - 1) - (secondaryOAM[i * 4 + 3]);
 		if (offset < 0 || offset > 7) {
 			continue;
 		}
 		offset = 7 - offset;
-		uint8_t color = (uint8_t)((spritePatterns[i] >> ((uint8_t)offset * 4)) & 0x0F);
+		uint8_t color = (uint8_t)((spritePatterns[i] >> (uint8_t)(offset * 4)) & 0x0F);
 		if (color % 4 == 0) {
 			continue;
 		}
@@ -392,7 +396,7 @@ void PPU::renderPixel() {
 	uint8_t background = backgroundPixel();
 	uint16_t temp = spritePixel();
 	uint8_t i = (temp & 0xFF00) >> 8;
-	uint8_t sprite = temp & 0x00FF;
+	uint8_t sprite = temp &0x00FF;
 	if (x < 8 && ((PPUMASK & SHOW_LEFT_BACKGROUND) == 0)) {
 		background = 0;
 	}
@@ -412,10 +416,10 @@ void PPU::renderPixel() {
 		color = background;
 	}
 	else {
-		if (spriteIndexes[i] == 0 && x < 255) {
+		if (i == 0 && x < 255) {
 			PPUSTATUS |= SPRITE_ZERO_HIT;
 		}
-		if (spritePriorities[i] == 0) {
+		if (((secondaryOAM[i * 4 + 2] >> 5) & 0x01) == 0) {
 			color = sprite | 0x10;
 		}
 		else {
@@ -426,11 +430,14 @@ void PPU::renderPixel() {
 	drawPixel(x, y, c);
 }
 
-uint32_t PPU::fetchSpritePattern(int col, int row) {
-	uint8_t tile = oamData[col * 4 + 1];
-	uint8_t attributes = oamData[col * 4 + 2];
+uint32_t PPU::fetchSpritePattern(int spriteNum) {
+	uint8_t y = secondaryOAM[spriteNum * 4 + 0];
+	uint8_t tile = secondaryOAM[spriteNum * 4 + 1];
+	uint8_t attributes = secondaryOAM[spriteNum * 4 + 2];
 	uint16_t address;
 	uint8_t table;
+
+	int row = (int)((scanline + 1) % 261) - y;
 	if ((PPUCTRL & SPRITE_SIZE) == 0) {
 		if (attributes & 0x80 == 0x80) {
 			row = 7 - row;
@@ -476,34 +483,65 @@ uint32_t PPU::fetchSpritePattern(int col, int row) {
 
 void PPU::evaluateSprites() {
 	uint32_t h;
-	if (PPUCTRL & SPRITE_SIZE == 0) {
-		h = 8;
+	static int n, m, value, oamIndex, tempSpriteCount;
+	static bool overflow;
+
+	//Secondary OAM Init
+	if (cycle > 0 && cycle <= 64) {
+		n = m = oamIndex = tempSpriteCount = 0;
+		overflow = false;
 	}
-	else {
-		h = 16;
+
+	if (n == 64) {
+		n = 0;
+		overflow = true;
 	}
-	uint32_t count = 0;
-	for (int i = 0; i < 64; i++) {
-		uint8_t y = oamData[i * 4 + 0];
-		uint8_t a = oamData[i * 4 + 1];
-		uint8_t x = oamData[i * 4 + 2];
-		int row = scanline - (uint32_t)y;
-		if (row < 0 || row >= h) {
-			continue;
+
+	//SpriteEvaluation
+	if (cycle > 64 && cycle <= 256) {
+		//read
+		if (cycle % 2 == 1) {
+			//read oamData[n][m]
+			value = oamData[n * 4 + m];
+			if (overflow) {
+				n++;
+				return;
+			}
+			if (m == 0) {
+				h = (PPUCTRL & SPRITE_SIZE) != 0 ? 16 : 8;
+				if (((int)((scanline + 1) % 261) - value) >= h || ((int)((scanline + 1) % 261) - value) < 0) {
+					m = 0;
+					n = (n + 1);
+					return;
+				}
+				else {
+					tempSpriteCount++;
+					if (tempSpriteCount == 9) {
+						PPUSTATUS |= SPRITE_OVERFLOW;
+					}
+				}
+			}
+			m++;
 		}
-		if (count < 8) {
-			spritePatterns[count] = fetchSpritePattern(i, row);
-			spritePositions[count] = x;
-			spritePriorities[count] = (a >> 5) & 1;
-			spriteIndexes[count] = (uint8_t)i;
+		//write
+		else {
+			if (tempSpriteCount <= 8) {
+				secondaryOAM[(tempSpriteCount - 1) * 4 + (m - 1)] = value;
+			}
+			if (m == 4) {
+				m = 0;
+				n = (n+1);
+			}
 		}
-		count++;
 	}
-	if (count > 8) {
-		count = 8;
-		PPUSTATUS |= SPRITE_OVERFLOW;
+
+	//Sprite Fetching
+	if (cycle == 257 && tempSpriteCount > 0) {
+		for (int i = 0; i < tempSpriteCount; i++) {
+			spritePatterns[i] = fetchSpritePattern(i);
+		}
+		spriteCount = tempSpriteCount > 8 ? 8 : tempSpriteCount;
 	}
-	spriteCount = count;
 }
 
 
@@ -589,26 +627,23 @@ void PPU::Step() {
 		}
 	}
 
-	if (renderingEnabled) {
-		if (cycle == 257) {
-			if (visibleLine) {
-				evaluateSprites();
-			}
-			else {
-				spriteCount = 0;
-			}
-		}
-	}
 
 	if (scanline == 241 && cycle == 1) {
 		setVerticalBlank();
 	}
 
-	if (preLine && cycle == 1) {
+	if (preLine && cycle == 0) {
 		clearVerticalBlank();
 		PPUSTATUS &= ~SPRITE_ZERO_HIT;
 		PPUSTATUS &= ~SPRITE_OVERFLOW;
 	}
+
+	if (renderingEnabled) {
+		if (scanline < 239 || preLine) {
+			evaluateSprites();
+		}
+	}
+
 }
 
 

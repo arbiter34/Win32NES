@@ -22,6 +22,7 @@ bool Cartridge::loadRom(PWSTR filePath) {
 
 	res = _wfopen_s(&in, filePath, L"rb");
 	if (res != 0) {
+		fclose(in);
 		return false;
 	}
 
@@ -31,6 +32,7 @@ bool Cartridge::loadRom(PWSTR filePath) {
 
 	res = fread(&(rom->header), 1, sizeof(rom->header), in);
 	if (res != sizeof(rom->header)) {
+		fclose(in);
 		return false;
 	}
 
@@ -43,13 +45,16 @@ bool Cartridge::loadRom(PWSTR filePath) {
 	printf("0x%04\n", rom->prg_rom[0]);
 	res = fread(rom->prg_rom, 1, prg_rom_size, in);
 	if (res != prg_rom_size) {
+		fclose(in);
 		return false;
 	}
 
 	int chr_rom_size = rom->header.chr_rom_pages * CHR_ROM_PAGE_SIZE;
-	rom->chr_rom = new uint8_t[chr_rom_size];
+	rom->header.chr_rom_pages++;
+	rom->chr_rom = new uint8_t[chr_rom_size + CHR_ROM_PAGE_SIZE];
 	res = fread(rom->chr_rom, 1, chr_rom_size, in);
 	if (res != chr_rom_size) {
+		fclose(in);
 		return false;
 	}
 

@@ -101,11 +101,7 @@ int APIENTRY _tWinMain(_In_ HINSTANCE hInstance,
 			}
 			else if (msg.message == WM_KEYUP) {
 				controller->key_up(msg.wParam);
-			}
-			else if (msg.message == WM_QUIT) {
-				break;
-			}
-			else {
+			} else {
 				TranslateMessage(&msg);
 				DispatchMessage(&msg);
 			}
@@ -160,7 +156,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    hInst = hInstance; // Store instance handle in our global variable
 
    hWnd = CreateWindow(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
-      CW_USEDEFAULT, 0, 550, 550, NULL, NULL, hInstance, NULL);
+      CW_USEDEFAULT, 1000, 550, 550, NULL, NULL, hInstance, NULL);
 
    if (!hWnd)
    {
@@ -306,7 +302,9 @@ BOOL Run(HWND hWnd) {
 		}
 		//romPath = L"C:\\Users\\alperst\\Documents\\Visual Studio 2013\\Projects\\Win32NES\\rom_singles\\01-basics.nes";
 	}
-	cartridge->loadRom(romPath);
+	if (!cartridge->loadRom(romPath)) {
+		return false;
+	}
 	cpu->reset();
 	running = true;
 	paused = false;

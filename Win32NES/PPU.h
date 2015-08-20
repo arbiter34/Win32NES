@@ -82,6 +82,7 @@ private:
 	uint8_t paletteData[32];
 	uint8_t nameTableData[2048];
 	uint8_t oamData[256];
+	uint8_t secondaryOAM[32];
 
 	uint16_t v;		//current vram address
 	uint16_t t;		//temp vram address
@@ -136,7 +137,7 @@ private:
 	uint8_t backgroundPixel();
 	uint16_t spritePixel();
 	void renderPixel();
-	uint32_t fetchSpritePattern(int col, int row);
+	uint32_t fetchSpritePattern(int spriteNum);
 	void evaluateSprites();
 };
 

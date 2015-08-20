@@ -58,39 +58,25 @@ void  Controller::write_value(uint8_t word){
 }
 
 const std::map<unsigned char, int> Controller::controller_map_1 = {
-	{ 0x31, 0 },
-	{ 0x32, 1 },
-	{ 0x33, 2 },
-	{ 0x34, 3 },
-	{ 0x51, 4 },
-	{ 0x57, 5 },
-	{ 0x45, 6 },
-	{ 0x52, 7 },
-	{ 0x41, 8 },
-	{ 0x53, 9 },
-	{ 0x44, 10 },
-	{ 0x46, 11 },
-	{ 0x5A, 12 },
-	{ 0x58, 13 }
-
+	{ 0x31, Button_A },
+	{ 0x32, Button_B },
+	{ 0x33, Button_Select },
+	{ 0x34, Button_Start },
+	{ 0x51, Button_Up },
+	{ 0x57, Button_Down },
+	{ 0x45, Button_Left },
+	{ 0x52, Button_Right }
 };
 
 const std::map<unsigned char, int> Controller::controller_map_2 = {
-	{ 0x31, 0 },
-	{ 0x32, 1 },
-	{ 0x33, 2 },
-	{ 0x34, 3 },
-	{ 0x51, 4 },
-	{ 0x57, 5 },
-	{ 0x45, 6 },
-	{ 0x52, 7 },
-	{ 0x41, 8 },
-	{ 0x53, 9 },
-	{ 0x44, 10 },
-	{ 0x46, 11 },
-	{ 0x5A, 12 },
-	{ 0x58, 13 }
-
+	{ 0x31, Button_A },
+	{ 0x32, Button_B },
+	{ 0x33, Button_Select },
+	{ 0x34, Button_Start },
+	{ 0x51, Button_Up },
+	{ 0x57, Button_Down },
+	{ 0x45, Button_Left },
+	{ 0x52, Button_Right }
 };
 
 bool Controller::buttons[2][8];
