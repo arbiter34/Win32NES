@@ -376,7 +376,7 @@ uint16_t PPU::spritePixel() {
 		return (uint16_t)0;
 	}
 	for (int i = 0; i < spriteCount; i++) {
-		uint32_t offset = (cycle - 1) - (secondaryOAM[i * 4 + 3]);
+		uint32_t offset = (cycle - 0) - (secondaryOAM[i * 4 + 3]);
 		if (offset < 0 || offset > 7) {
 			continue;
 		}
@@ -536,7 +536,7 @@ void PPU::evaluateSprites() {
 	}
 
 	//Sprite Fetching
-	if (cycle == 257 && tempSpriteCount > 0) {
+	if (cycle == 339 && tempSpriteCount > 0) {
 		for (int i = 0; i < tempSpriteCount; i++) {
 			spritePatterns[i] = fetchSpritePattern(i);
 		}
@@ -548,6 +548,9 @@ void PPU::evaluateSprites() {
 
 
 void PPU::tick() {
+	if (cycle == 338) {
+		spriteCount = 0;
+	}
 	if (nmiDelay > 0) {
 		nmiDelay--;
 		if (nmiDelay == 0 && ((PPUCTRL & NMI_OUTPUT) != 0) && nmiOccurred) {
