@@ -378,9 +378,7 @@ uint16_t PPU::spritePixel() {
 	}
 	//iterate over found sprites on current scanline
 	for (int i = 0; i < spriteCount; i++) {
-		if (i == 1) {
-			i = i;
-		}
+
 		//check whether left of sprite is current x or in previous 7 pixels
 		uint32_t offset = (cycle - 1) - (secondaryOAM[i * 4 + 3]);
 		if (offset < 0 || offset >= 8) {
@@ -515,7 +513,7 @@ void PPU::evaluateSprites() {
 
 	//Secondary OAM Init
 	if (cycle > 0 && cycle <= 64) {
-		n = m = oamIndex = tempSpriteCount = 0;
+		n = m = value = oamIndex = tempSpriteCount = 0;
 		overflow = found = false;
 	}
 
@@ -530,42 +528,28 @@ void PPU::evaluateSprites() {
 		if (cycle % 2 == 1) {
 			//read oamData[n][m]
 			value = oamData[n * 4 + m];
-			if (overflow) {
-				n++;
-				return;
-			}
-			if (!found) {
-				h = (PPUCTRL & SPRITE_SIZE) != 0 ? 16 : 8;
-				if (((int)((scanline + 1) % 261) - value) >= h || ((int)((scanline + 1) % 261) - value) < 0) {
-					m = 0;
-					n = (n + 1);
-					return;
-				}
-				else {
-					found = true;
-				}
-			}
 		}
 		//write
 		else {
 			if (overflow) {
-				n++;
+				return;
 			}
-			if (tempSpriteCount <= 8) {
+			int h = (PPUCTRL & SPRITE_SIZE) != 0 ? 16 : 8;
+			if (tempSpriteCount < 8) {
 				secondaryOAM[(tempSpriteCount) * 4 + (m)] = value;
-				if (found) {
-					m++;
-				}
 			}
+			if (m == 0 && (((int)((scanline + 1) % 261) - value) >= h || ((int)((scanline + 1) % 261) - value) < 0)) {
+				n++;
+				return;
+			}
+			m++;
 			if (m == 4) {
-
+				m = 0;
+				n++;
 				tempSpriteCount++;
 				if (tempSpriteCount == 9) {
 					PPUSTATUS |= SPRITE_OVERFLOW;
 				}
-				m = 0;
-				n = (n+1);
-				found = false;
 			}
 		}
 	}
