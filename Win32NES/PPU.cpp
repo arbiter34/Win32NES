@@ -372,19 +372,27 @@ uint8_t PPU::backgroundPixel() {
 }
 
 uint16_t PPU::spritePixel() {
+	//check show sprites
 	if ((PPUMASK & SHOW_SPRITES) == 0) {
 		return (uint16_t)0;
 	}
+	//iterate over found sprites on current scanline
 	for (int i = 0; i < spriteCount; i++) {
-		uint32_t offset = (cycle - 0) - (secondaryOAM[i * 4 + 3]);
-		if (offset < 0 || offset > 7) {
+		if (i == 1) {
+			i = i;
+		}
+		//check whether left of sprite is current x or in previous 7 pixels
+		uint32_t offset = (cycle - 1) - (secondaryOAM[i * 4 + 3]);
+		if (offset < 0 || offset >= 8) {
 			continue;
 		}
+		//Correct offset for x in sprite
 		offset = 7 - offset;
-		uint8_t color = (uint8_t)((spritePatterns[i] >> (uint8_t)(offset * 4)) & 0x0F);
+		uint8_t color = (uint8_t)((spritePatterns[i] >> (offset * 4)) & 0x0F);
 		if (color % 4 == 0) {
 			continue;
 		}
+		//passing back sprite number and color(4 bits)
 		return (i << 8) | color;
 	}
 	return (uint16_t)0;
@@ -439,57 +447,76 @@ uint32_t PPU::fetchSpritePattern(int spriteNum) {
 
 	int row = (int)((scanline + 1) % 261) - y;
 	if ((PPUCTRL & SPRITE_SIZE) == 0) {
-		if (attributes & 0x80 == 0x80) {
+		//Check vertical mirror
+		if ((attributes & 0x80) == 0x80) {
 			row = 7 - row;
 		}
+		//Get sprite table
 		table = (PPUCTRL & SPRITE_TABLE) >> 3;
 		address = 0x1000 * ((uint16_t)table) + ((uint16_t)tile) * 16 + ((uint16_t)row);
 	}
 	else {
-		if (attributes & 0x80 == 0x80) {
+		//Check vertical mirror
+		if ((attributes & 0x80) == 0x80) {
 			row = 15 - row;
 		}
+		//Compute table
 		table = tile & 0x01;
+		//0 out the bank number(LSB)
 		tile &= 0xFE;
+
+		//Check whether we're in the second half of a tall sprite
 		if (row > 7) {
 			tile++;
 			row -= 8;
 		}
 		address = 0x1000 * ((uint16_t)table) + ((uint16_t)tile) * 16 + ((uint16_t)row);
 	}
+	//palette of sprite
 	uint8_t a = (attributes & 0x03) << 2;
+	//get bit plane 0 of current row (bit 0 of color)
 	lowTileByte = read(address);
+	//get bit plane 1 of current row (bit 1 of color)
 	highTileByte = read(address + 8);
 	uint32_t data = 0;
 	for (int i = 0; i < 8; i++) {
 		uint8_t p1, p2;
-		if (attributes & 0x40 == 0x40) {
+		//Check mirror horizontal
+		if ((attributes & 0x40) == 0x40) {
+			//bit 0
 			p1 = (lowTileByte & 0x01) << 0;
+			//bit 1
 			p2 = (highTileByte & 0x01) << 1;
+			//shift tiles right
 			lowTileByte >>= 1;
 			highTileByte >>= 1;
 		}
+		//No h-mirror
 		else {
+			//bit 0
 			p1 = (lowTileByte & 0x80) >> 7;
+			//bit 1
 			p2 = (highTileByte & 0x80) >> 6;
+			//shift tiles left
 			lowTileByte <<= 1;
 			highTileByte <<= 1;
 		}
 		data <<= 4;
 		data |= (uint32_t)(a | p1 | p2);
 	}
+	//return 8 pixel row 
 	return data;
 }
 
 void PPU::evaluateSprites() {
 	uint32_t h;
 	static int n, m, value, oamIndex, tempSpriteCount;
-	static bool overflow;
+	static bool overflow, found;
 
 	//Secondary OAM Init
 	if (cycle > 0 && cycle <= 64) {
 		n = m = oamIndex = tempSpriteCount = 0;
-		overflow = false;
+		overflow = found = false;
 	}
 
 	if (n == 64) {
@@ -507,7 +534,7 @@ void PPU::evaluateSprites() {
 				n++;
 				return;
 			}
-			if (m == 0) {
+			if (!found) {
 				h = (PPUCTRL & SPRITE_SIZE) != 0 ? 16 : 8;
 				if (((int)((scanline + 1) % 261) - value) >= h || ((int)((scanline + 1) % 261) - value) < 0) {
 					m = 0;
@@ -515,22 +542,30 @@ void PPU::evaluateSprites() {
 					return;
 				}
 				else {
-					tempSpriteCount++;
-					if (tempSpriteCount == 9) {
-						PPUSTATUS |= SPRITE_OVERFLOW;
-					}
+					found = true;
 				}
 			}
-			m++;
 		}
 		//write
 		else {
+			if (overflow) {
+				n++;
+			}
 			if (tempSpriteCount <= 8) {
-				secondaryOAM[(tempSpriteCount - 1) * 4 + (m - 1)] = value;
+				secondaryOAM[(tempSpriteCount) * 4 + (m)] = value;
+				if (found) {
+					m++;
+				}
 			}
 			if (m == 4) {
+
+				tempSpriteCount++;
+				if (tempSpriteCount == 9) {
+					PPUSTATUS |= SPRITE_OVERFLOW;
+				}
 				m = 0;
 				n = (n+1);
+				found = false;
 			}
 		}
 	}
