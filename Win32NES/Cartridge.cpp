@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "Cartridge.h"
+#include "MapperFactory.h"
 #include <iostream>
 #include <string>
 
@@ -64,7 +65,11 @@ bool Cartridge::loadRom(PWSTR filePath) {
 
 	printf("0x%04\n", rom->prg_rom[0]);
 	//TO-DO: Pick correct mapper
-	mapper = new Mapper(rom);
+	mapper = MapperFactory::getMapper(rom);
+	if (mapper == NULL) {
+		fclose(in);
+		return false;
+	}
 
 	fclose(in);
 

@@ -13,6 +13,12 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Source Files\Mappers">
+      <UniqueIdentifier>{047aa892-362d-47bc-a999-b399558eb24e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Mappers">
+      <UniqueIdentifier>{8bd23217-5082-4903-b9ba-84c3a799dd78}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <Text Include="ReadMe.txt" />
@@ -42,13 +48,22 @@
     <ClInclude Include="defines.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Mapper.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="Palette.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="PPU.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Mapper.h">
+      <Filter>Header Files\Mappers</Filter>
+    </ClInclude>
+    <ClInclude Include="MapperFactory.h">
+      <Filter>Header Files\Mappers</Filter>
+    </ClInclude>
+    <ClInclude Include="Mapper2.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Mapper1.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -68,13 +83,22 @@
     <ClCompile Include="CPU.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Mapper.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="Palette.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="PPU.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="MapperFactory.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Mapper.cpp">
+      <Filter>Source Files\Mappers</Filter>
+    </ClCompile>
+    <ClCompile Include="Mapper2.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Mapper1.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

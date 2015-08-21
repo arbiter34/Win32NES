@@ -42,7 +42,11 @@ void CPU::reset() {
 
 uint8_t CPU::execute()
 {
-	uint8_t previousCycleCount = cycleCount;
+	if (cycleCount == 25000) {
+		cycleCount = 0;
+	}
+	pageCrossed = false;
+	uint32_t previousCycleCount = cycleCount;
 	if (stall > 0) {
 		stall--;
 		return 1;
@@ -59,13 +63,14 @@ uint8_t CPU::execute()
 	//Fetch
 	opcode = fetch();
 
-	if (pc == 0x03A0 && opcode == 0x1A) {
-		pc = pc;
-	}
 
 	//Addressing Mode Decode
 	(this->*addressingModeTable[(opcode)])();
 	pc += instructionSizes[opcode];
+
+	if (opcode == 0xA2 && read_memory(address) == 0x18) {
+		opcode = opcode;
+	}
 
 	//Instruction Decode
 	(this->*cpuTable[(opcode)])();

@@ -22,7 +22,7 @@ void PPU::setVar(Cartridge *cartridge, CPU *cpu) {
 
 void PPU::reset() {
 	cycle = 340;
-	scanline = 240;
+	scanline = 261;
 	frame = 0;
 	writeControl(0);
 	writeMask(0);
@@ -654,10 +654,10 @@ void PPU::Step() {
 		setVerticalBlank();
 	}
 
-	if (preLine && cycle == 0) {
-		clearVerticalBlank();
+	if (preLine && cycle == 1) {
 		PPUSTATUS &= ~SPRITE_ZERO_HIT;
 		PPUSTATUS &= ~SPRITE_OVERFLOW;
+		clearVerticalBlank();
 	}
 
 	if (renderingEnabled) {

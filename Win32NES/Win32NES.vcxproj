@@ -85,6 +85,9 @@
     <ClInclude Include="CPU.h" />
     <ClInclude Include="defines.h" />
     <ClInclude Include="Mapper.h" />
+    <ClInclude Include="Mapper1.h" />
+    <ClInclude Include="Mapper2.h" />
+    <ClInclude Include="MapperFactory.h" />
     <ClInclude Include="Palette.h" />
     <ClInclude Include="PPU.h" />
     <ClInclude Include="Resource.h" />
@@ -97,6 +100,9 @@
     <ClCompile Include="Controller.cpp" />
     <ClCompile Include="CPU.cpp" />
     <ClCompile Include="Mapper.cpp" />
+    <ClCompile Include="Mapper1.cpp" />
+    <ClCompile Include="Mapper2.cpp" />
+    <ClCompile Include="MapperFactory.cpp" />
     <ClCompile Include="Palette.cpp" />
     <ClCompile Include="PPU.cpp" />
     <ClCompile Include="stdafx.cpp">
