@@ -5,7 +5,7 @@
 Mapper::Mapper(iNesRom *rom)
 {
 	this->rom = rom;
-	prg_banks = rom->header.prg_rom_pages / 4;
+	prg_banks = rom->header.prg_rom_pages;
 	chr_banks = rom->header.chr_rom_pages;
 }
 

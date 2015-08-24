@@ -89,17 +89,17 @@
     <ClCompile Include="PPU.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="MapperFactory.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="Mapper.cpp">
       <Filter>Source Files\Mappers</Filter>
     </ClCompile>
-    <ClCompile Include="Mapper2.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="MapperFactory.cpp">
+      <Filter>Source Files\Mappers</Filter>
     </ClCompile>
     <ClCompile Include="Mapper1.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Mappers</Filter>
+    </ClCompile>
+    <ClCompile Include="Mapper2.cpp">
+      <Filter>Source Files\Mappers</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

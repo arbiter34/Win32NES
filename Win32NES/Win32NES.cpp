@@ -227,6 +227,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		EndPaint(hWnd, &ps);
 		break;
 	case WM_DESTROY:
+		Stop(hWnd);
 		PostQuitMessage(0);
 		break;
 	default:
@@ -351,8 +352,8 @@ void StartTimers(HWND hWnd) {
 }
 
 void StopTimers() {
-	timeKillEvent(cpuTimerId);
 	timeKillEvent(updateScreenId);
+	running = false;
 }
 
 void __cdecl odprintfs(const char *format, ...)
