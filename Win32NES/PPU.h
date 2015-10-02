@@ -76,13 +76,13 @@ private:
 	Cartridge *cartridge;
 	CPU *cpu;
 
-	color_t *front;
-	color_t *back;
+	color_t *front;				//array of colors - this is our screen
+	color_t *back;				//double buffered - second buffer
 
-	uint8_t paletteData[32];
-	uint8_t nameTableData[2048];
-	uint8_t oamData[256];
-	uint8_t secondaryOAM[32];
+	uint8_t paletteData[32];	//palette information - color lookup
+	uint8_t nameTableData[2048];	//nametable - background table info
+	uint8_t oamData[256];			//sprite memory
+	uint8_t secondaryOAM[32];		//active sprite memory
 
 	uint16_t v;		//current vram address
 	uint16_t t;		//temp vram address
@@ -90,27 +90,28 @@ private:
 	uint8_t w;		//write toggle
 	uint8_t f;		//even/odd frame flag
 
-	uint8_t reg;
+	uint8_t reg;	
 
-	//NMI Flags
+	//NMI Flags - Non-Maskible Interrupts
 	bool nmiOccurred;
 	bool nmiPrevious;
 	uint8_t nmiDelay;
 
-	// background temporary variables
+	//These can be considered the latches for the various fetches
 	uint8_t nameTableByte;
 	uint8_t attributeTableByte;
 	uint8_t lowTileByte;
 	uint8_t highTileByte;
 	uint64_t tileData;
 
-	// sprite temporary variables
+	//Sprite temporary variables - necessary for sprite evaluation
 	uint32_t spriteCount;
 	uint32_t spritePatterns[8];
 	uint8_t spritePositions[8];
 	uint8_t spritePriorities[8];
 	uint8_t spriteIndexes[8];
 
+	//Status flag registers
 	uint8_t PPUCTRL;
 	uint8_t PPUMASK;
 	uint8_t PPUSTATUS;
